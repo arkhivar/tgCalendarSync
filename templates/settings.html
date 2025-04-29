@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Google Calendar Telegram Notifier</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container py-4">
+        <header class="pb-3 mb-4 border-bottom">
+            <div class="d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-calendar-check fs-2 me-3 text-primary"></i>
+                    <h1 class="fs-4">Google Calendar Telegram Notifier</h1>
+                </div>
+                <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-house-door me-1"></i> Home
+                </a>
+            </div>
+        </header>
+
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="p-4 mb-4 bg-body-tertiary rounded-3">
+            <div class="container-fluid py-3">
+                <h2 class="fw-bold mb-3"><i class="bi bi-gear me-2"></i>Settings</h2>
+                <p class="mb-4">Configure the application to monitor your Google Calendar and send notifications to Telegram.</p>
+                
+                <form method="post" action="{{ url_for('settings') }}">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-primary-subtle">
+                                    <h3 class="card-title mb-0"><i class="bi bi-google me-2"></i>Google Calendar Settings</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="google_credentials" class="form-label">Google API Credentials (JSON)</label>
+                                        <textarea class="form-control" id="google_credentials" name="google_credentials" rows="10" required>{{ settings.google_credentials if settings else '' }}</textarea>
+                                        <div class="form-text">
+                                            Paste your Google API credentials JSON here. 
+                                            <a href="https://developers.google.com/calendar/api/quickstart/python" target="_blank">
+                                                Learn how to get credentials
+                                            </a>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="calendar_id" class="form-label">Calendar ID</label>
+                                        <input type="text" class="form-control" id="calendar_id" name="calendar_id" value="{{ settings.calendar_id if settings else 'primary' }}" required>
+                                        <div class="form-text">
+                                            Use 'primary' for your main calendar or enter a specific Calendar ID
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-primary-subtle">
+                                    <h3 class="card-title mb-0"><i class="bi bi-telegram me-2"></i>Telegram Settings</h3>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="telegram_bot_token" class="form-label">Telegram Bot Token</label>
+                                        <input type="text" class="form-control" id="telegram_bot_token" name="telegram_bot_token" value="{{ settings.telegram_bot_token if settings else '' }}" required>
+                                        <div class="form-text">
+                                            Create a bot via <a href="https://t.me/BotFather" target="_blank">@BotFather</a> and get the token
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="chat_id" class="form-label">Chat ID</label>
+                                        <input type="text" class="form-control" id="chat_id" name="chat_id" value="{{ settings.chat_id if settings else '' }}" required>
+                                        <div class="form-text">
+                                            Your personal chat ID or group/channel ID. 
+                                            Use <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> to get your ID
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="check_interval" class="form-label">Check Interval (minutes)</label>
+                                        <input type="number" min="5" max="1440" class="form-control" id="check_interval" name="check_interval" value="{{ settings.check_interval if settings else 15 }}" required>
+                                        <div class="form-text">
+                                            How often to check for calendar changes (minutes)
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 d-flex justify-content-between">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left me-1"></i> Back
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Save Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="p-4 mb-4 bg-body-tertiary rounded-3">
+            <div class="container-fluid py-3">
+                <h3 class="fw-bold mb-3"><i class="bi bi-info-circle me-2"></i>Setup Guide</h3>
+                
+                <div class="accordion" id="setupAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGoogle" aria-expanded="true" aria-controls="collapseGoogle">
+                                Setting up Google Calendar API
+                            </button>
+                        </h2>
+                        <div id="collapseGoogle" class="accordion-collapse collapse show" data-bs-parent="#setupAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Go to the <a href="https://console.developers.google.com/" target="_blank">Google Developers Console</a></li>
+                                    <li>Create a new project</li>
+                                    <li>Enable the Google Calendar API for your project</li>
+                                    <li>Create OAuth 2.0 credentials (Desktop application type)</li>
+                                    <li>Download the credentials JSON file</li>
+                                    <li>Copy and paste the entire contents of the JSON file into the Google API Credentials field</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTelegram" aria-expanded="false" aria-controls="collapseTelegram">
+                                Setting up Telegram Bot
+                            </button>
+                        </h2>
+                        <div id="collapseTelegram" class="accordion-collapse collapse" data-bs-parent="#setupAccordion">
+                            <div class="accordion-body">
+                                <ol>
+                                    <li>Open Telegram and search for <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
+                                    <li>Start a chat and send the command <code>/newbot</code></li>
+                                    <li>Follow the instructions to create a new bot</li>
+                                    <li>Once created, BotFather will give you a token - copy this to the Telegram Bot Token field</li>
+                                    <li>Start a chat with your newly created bot</li>
+                                    <li>To get your chat ID, talk to <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a> and copy the ID to the Chat ID field</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="pt-3 mt-4 text-muted border-top">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    &copy; 2023 Google Calendar Telegram Notifier
+                </div>
+                <div>
+                    <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-house-door me-1"></i> Home
+                    </a>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
