@@ -6,7 +6,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from models import EventRecord, CalendarSettings
+from models import EventRecord, CalendarSettings, UserCalendar
 from app import db
 
 # Set up logging
@@ -80,9 +80,29 @@ def parse_event_datetime(event_time):
         return datetime.fromisoformat(event_time['date'])
     return None
 
-def check_calendar_changes(credentials_json, calendar_id='primary'):
+def get_creator_info(event):
+    """
+    Extract creator information from an event
+    """
+    creator = {}
+    
+    # Check for creator info in the event
+    if 'creator' in event:
+        creator = event['creator']
+    
+    return creator.get('email', ''), creator.get('displayName', '')
+
+def check_calendar_changes(credentials_json, calendar_id='primary', user_calendar_id=None):
     """
     Check for changes in the calendar and return a list of changes
+    
+    Args:
+        credentials_json (str): The Google credentials JSON string
+        calendar_id (str): The ID of the calendar to check
+        user_calendar_id (int): The ID of the UserCalendar record
+        
+    Returns:
+        list: A list of changes detected in the calendar
     """
     try:
         # Get Google Calendar service
@@ -94,9 +114,20 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
         # List to store changes
         changes = []
         
-        # Settings for updating last check time
-        settings = CalendarSettings.query.first()
+        # Current time
         current_time = datetime.utcnow()
+        
+        # Get the user calendar
+        user_calendar = None
+        if user_calendar_id:
+            user_calendar = UserCalendar.query.get(user_calendar_id)
+        
+        if not user_calendar:
+            logger.error(f"UserCalendar with ID {user_calendar_id} not found")
+            return changes
+            
+        # User email for looking up event creators
+        user_email = user_calendar.email.lower() if user_calendar.email else ''
         
         # Process each event
         for event in events:
@@ -122,13 +153,25 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
             if updated_time_str:
                 updated_time = datetime.fromisoformat(updated_time_str.replace('Z', '+00:00'))
             
+            # Get creator info (email and name)
+            creator_email, creator_name = get_creator_info(event)
+            creator_info = ""
+            
+            # Only add creator info if it's not the user's own email
+            if creator_email and creator_email.lower() != user_email:
+                creator_info = f"\n👤 Modified by: {creator_name or creator_email}\n"
+            
             # Check if this event exists in our database
-            existing_event = EventRecord.query.filter_by(event_id=event_id).first()
+            existing_event = EventRecord.query.filter_by(
+                event_id=event_id, 
+                user_calendar_id=user_calendar_id
+            ).first()
             
             if not existing_event:
                 # New event
                 new_event = EventRecord(
                     event_id=event_id,
+                    user_calendar_id=user_calendar_id,
                     summary=summary,
                     description=description,
                     location=location,
@@ -147,6 +190,9 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
                 
                 if location:
                     message += f"📍 Location: {location}\n"
+                    
+                if creator_info:
+                    message += creator_info
                 
                 changes.append({
                     'type': 'added',
@@ -195,6 +241,9 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
                     
                     for change in changes_desc:
                         message += f"- {change}\n"
+                        
+                    if creator_info:
+                        message += creator_info
                     
                     changes.append({
                         'type': 'updated',
@@ -203,8 +252,8 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
                     })
         
         # Check for deleted events
-        # Get all event IDs from the database
-        db_event_ids = {event.event_id for event in EventRecord.query.all()}
+        # Get all event IDs from the database for this user calendar
+        db_event_ids = {event.event_id for event in EventRecord.query.filter_by(user_calendar_id=user_calendar_id).all()}
         
         # Get all event IDs from the API response
         api_event_ids = {event.get('id') for event in events}
@@ -214,7 +263,10 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
         deleted_event_ids = db_event_ids - api_event_ids
         
         for event_id in deleted_event_ids:
-            deleted_event = EventRecord.query.filter_by(event_id=event_id).first()
+            deleted_event = EventRecord.query.filter_by(
+                event_id=event_id, 
+                user_calendar_id=user_calendar_id
+            ).first()
             
             if deleted_event:
                 # Check if the event's end time is in the future
@@ -232,10 +284,6 @@ def check_calendar_changes(credentials_json, calendar_id='primary'):
                 
                 # Remove the event from the database
                 db.session.delete(deleted_event)
-        
-        # Update the last check time
-        if settings:
-            settings.last_check = current_time
         
         # Commit all changes to the database
         db.session.commit()
