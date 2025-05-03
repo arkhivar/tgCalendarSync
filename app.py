@@ -28,7 +28,13 @@ app.secret_key = os.environ.get("SESSION_SECRET", "default-secret-key-for-develo
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL", "sqlite:///calendar_monitor.db")
+# Use PostgreSQL database if DATABASE_URL is provided, otherwise fallback to SQLite
+database_url = os.environ.get("DATABASE_URL")
+if database_url and database_url.startswith("postgres"):
+    # Ensure psycopg2 works properly with SQLAlchemy
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url or "sqlite:///calendar_monitor.db"
+logger.info(f"Using database: {app.config['SQLALCHEMY_DATABASE_URI'].split('@')[0]}***")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
