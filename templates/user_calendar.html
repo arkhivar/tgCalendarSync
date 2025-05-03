@@ -105,9 +105,23 @@
                             
                             <div class="mb-3">
                                 <label for="calendar_id" class="form-label">Calendar ID</label>
-                                <input type="text" class="form-control" id="calendar_id" name="calendar_id" value="{{ user_calendar.calendar_id if user_calendar else 'primary' }}">
+                                <select class="form-select" id="calendar_id" name="calendar_id">
+                                    <option value="primary" {% if user_calendar and user_calendar.calendar_id == 'primary' %}selected{% endif %}>Primary Calendar</option>
+                                    <option value="all" {% if user_calendar and user_calendar.calendar_id == 'all' %}selected{% endif %}>All Calendars</option>
+                                    {% if user_calendar and user_calendar.calendar_id != 'primary' and user_calendar.calendar_id != 'all' %}
+                                    <option value="{{ user_calendar.calendar_id }}" selected>Custom: {{ user_calendar.calendar_id }}</option>
+                                    {% endif %}
+                                </select>
                                 <div class="form-text">
-                                    Use 'primary' for the main calendar or enter a specific Calendar ID
+                                    Choose "All Calendars" to monitor all calendars the user has access to, "Primary Calendar" for just the main calendar, 
+                                    or enter a custom calendar ID below if needed.
+                                </div>
+                            </div>
+                            <div class="mb-3" id="custom-calendar-div" style="{% if user_calendar and user_calendar.calendar_id != 'primary' and user_calendar.calendar_id != 'all' %}display:block;{% else %}display:none;{% endif %}">
+                                <label for="custom_calendar_id" class="form-label">Custom Calendar ID</label>
+                                <input type="text" class="form-control" id="custom_calendar_id" name="custom_calendar_id" value="{% if user_calendar and user_calendar.calendar_id != 'primary' and user_calendar.calendar_id != 'all' %}{{ user_calendar.calendar_id }}{% endif %}">
+                                <div class="form-text">
+                                    Enter a specific Calendar ID here if needed (e.g., "speakenglishoffice@gmail.com")
                                 </div>
                             </div>
                         </div>
@@ -226,5 +240,32 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // JavaScript to handle the calendar_id select field
+        document.addEventListener('DOMContentLoaded', function() {
+            const calendarIdSelect = document.getElementById('calendar_id');
+            const customCalendarDiv = document.getElementById('custom-calendar-div');
+            const customCalendarInput = document.getElementById('custom_calendar_id');
+            
+            // Function to toggle the custom calendar field
+            function toggleCustomCalendarField() {
+                if (calendarIdSelect.value !== 'primary' && calendarIdSelect.value !== 'all') {
+                    customCalendarDiv.style.display = 'block';
+                    if (calendarIdSelect.value !== 'custom') {
+                        customCalendarInput.value = calendarIdSelect.value;
+                    }
+                } else {
+                    customCalendarDiv.style.display = 'none';
+                }
+            }
+            
+            // Set up event listener for changes
+            calendarIdSelect.addEventListener('change', toggleCustomCalendarField);
+            
+            // Initial setup based on initial value
+            toggleCustomCalendarField();
+        });
+    </script>
 </body>
 </html>

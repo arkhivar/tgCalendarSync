@@ -38,6 +38,20 @@ def get_google_service(credentials_json):
         logger.error(f"Error creating Google service: {str(e)}")
         raise
 
+def get_user_calendars(service):
+    """
+    Retrieve all calendars available to the user
+    """
+    try:
+        # Call the Calendar API to get all calendar lists
+        calendar_list = service.calendarList().list().execute()
+        
+        return calendar_list.get('items', [])
+    
+    except Exception as e:
+        logger.error(f"Error retrieving user calendars: {str(e)}")
+        raise
+
 def get_calendar_events(service, calendar_id='primary', time_min=None, time_max=None):
     """
     Retrieve events from the specified calendar
@@ -62,11 +76,27 @@ def get_calendar_events(service, calendar_id='primary', time_min=None, time_max=
             orderBy='startTime'
         ).execute()
         
-        return events_result.get('items', [])
+        # Get the calendar info to include calendar name in the events
+        calendar_info = None
+        try:
+            calendar_info = service.calendars().get(calendarId=calendar_id).execute()
+        except:
+            # Handling in case we can't get calendar info
+            pass
+            
+        # Add calendar name to each event
+        events = events_result.get('items', [])
+        calendar_name = calendar_info.get('summary', calendar_id) if calendar_info else calendar_id
+        
+        for event in events:
+            event['calendarName'] = calendar_name
+        
+        return events
     
     except Exception as e:
-        logger.error(f"Error retrieving calendar events: {str(e)}")
-        raise
+        logger.error(f"Error retrieving calendar events for calendar {calendar_id}: {str(e)}")
+        # Return empty list instead of raising, so we can continue with other calendars
+        return []
 
 def parse_event_datetime(event_time):
     """
@@ -98,7 +128,7 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
     
     Args:
         credentials_json (str): The Google credentials JSON string
-        calendar_id (str): The ID of the calendar to check
+        calendar_id (str): The ID of the calendar to check, or 'all' to check all calendars
         user_calendar_id (int): The ID of the UserCalendar record
         
     Returns:
@@ -107,9 +137,6 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
     try:
         # Get Google Calendar service
         service = get_google_service(credentials_json)
-        
-        # Get events from the calendar
-        events = get_calendar_events(service, calendar_id)
         
         # List to store changes
         changes = []
@@ -128,6 +155,25 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
             
         # User email for looking up event creators
         user_email = user_calendar.email.lower() if user_calendar.email else ''
+        
+        # Get all events from all calendars if 'all' is specified
+        events = []
+        if calendar_id == 'all':
+            # Get all calendars the user has access to
+            calendars = get_user_calendars(service)
+            logger.info(f"Found {len(calendars)} calendars for user {user_email}")
+            
+            # Get events from each calendar
+            for calendar in calendars:
+                cal_id = calendar.get('id')
+                logger.debug(f"Getting events for calendar {cal_id}")
+                calendar_events = get_calendar_events(service, cal_id)
+                events.extend(calendar_events)
+                
+            logger.info(f"Retrieved {len(events)} events from all calendars")
+        else:
+            # Get events from the specified calendar
+            events = get_calendar_events(service, calendar_id)
         
         # Process each event
         for event in events:
@@ -188,6 +234,10 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                 message = f"🆕 New event added: {summary}\n"
                 message += f"📅 Date: {start_time_str}\n"
                 
+                # Add calendar name if it's available and not the default
+                if 'calendarName' in event and event['calendarName'] not in ['primary', calendar_id]:
+                    message += f"📆 Calendar: {event['calendarName']}\n"
+                
                 if location:
                     message += f"📍 Location: {location}\n"
                     
@@ -237,6 +287,11 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                     # Create notification message
                     message = f"🔄 Event updated: {summary}\n"
                     message += f"📅 Date: {start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'}\n"
+                    
+                    # Add calendar name if it's available and not the default
+                    if 'calendarName' in event and event['calendarName'] not in ['primary', calendar_id]:
+                        message += f"📆 Calendar: {event['calendarName']}\n"
+                    
                     message += "Changes:\n"
                     
                     for change in changes_desc:

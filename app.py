@@ -283,7 +283,19 @@ def edit_user_calendar(user_id):
         user_calendar.display_name = request.form.get('display_name')
         user_calendar.topic_name = request.form.get('topic_name')
         user_calendar.google_credentials = request.form.get('google_credentials')
-        user_calendar.calendar_id = request.form.get('calendar_id', 'primary')
+        
+        # Handle calendar ID selection
+        calendar_id = request.form.get('calendar_id')
+        if calendar_id == 'primary' or calendar_id == 'all':
+            user_calendar.calendar_id = calendar_id
+        else:
+            # Check for custom calendar ID
+            custom_calendar_id = request.form.get('custom_calendar_id')
+            if custom_calendar_id and custom_calendar_id.strip():
+                user_calendar.calendar_id = custom_calendar_id.strip()
+            else:
+                user_calendar.calendar_id = 'primary'  # Default if no valid selection
+        
         user_calendar.is_active = 'is_active' in request.form
         
         db.session.commit()
@@ -295,12 +307,24 @@ def edit_user_calendar(user_id):
 @app.route('/calendar/new', methods=['GET', 'POST'])
 def new_user_calendar():
     if request.method == 'POST':
+        # Handle calendar ID selection
+        calendar_id = request.form.get('calendar_id')
+        if calendar_id == 'primary' or calendar_id == 'all':
+            final_calendar_id = calendar_id
+        else:
+            # Check for custom calendar ID
+            custom_calendar_id = request.form.get('custom_calendar_id')
+            if custom_calendar_id and custom_calendar_id.strip():
+                final_calendar_id = custom_calendar_id.strip()
+            else:
+                final_calendar_id = 'primary'  # Default if no valid selection
+        
         user_calendar = UserCalendar(
             email=request.form.get('email'),
             display_name=request.form.get('display_name'),
             topic_name=request.form.get('topic_name'),
             google_credentials=request.form.get('google_credentials'),
-            calendar_id=request.form.get('calendar_id', 'primary'),
+            calendar_id=final_calendar_id,
             is_active=True,
             last_check=datetime.utcnow()
         )
