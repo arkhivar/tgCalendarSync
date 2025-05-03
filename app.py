@@ -191,9 +191,9 @@ def scheduled_calendar_check():
                         message = change['message']
                         
                         # If using a supergroup but no topic was specified for this user,
-                        # prefix the message with the user's display name or email
+                        # prefix the message with the user's email
                         if settings.is_supergroup and not topic_name:
-                            prefix = user_calendar.display_name or user_calendar.email.split('@')[0]
+                            prefix = user_calendar.email.split('@')[0]
                             message = f"[{prefix}] {message}"
                         
                         logger.info(f"Calendar change detected for {user_calendar.email}: {message[:50]}...")
@@ -279,7 +279,6 @@ def edit_user_calendar(user_id):
     
     if request.method == 'POST':
         user_calendar.email = request.form.get('email')
-        user_calendar.display_name = request.form.get('display_name')
         user_calendar.topic_name = request.form.get('topic_name')
         user_calendar.google_credentials = request.form.get('google_credentials')
         
@@ -320,7 +319,6 @@ def new_user_calendar():
         
         user_calendar = UserCalendar(
             email=request.form.get('email'),
-            display_name=request.form.get('display_name'),
             topic_name=request.form.get('topic_name'),
             google_credentials=request.form.get('google_credentials'),
             calendar_id=final_calendar_id,

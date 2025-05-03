@@ -73,9 +73,9 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>User</th>
                                 <th>Email</th>
-                                <th>Topic</th>
+                                <th>Calendar</th>
+                                <th>Telegram Topic</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -84,8 +84,16 @@
                             {% if user_calendars and user_calendars|length > 0 %}
                                 {% for calendar in user_calendars %}
                                 <tr>
-                                    <td>{{ calendar.display_name }}</td>
                                     <td>{{ calendar.email }}</td>
+                                    <td>
+                                        {% if calendar.calendar_id == 'primary' %}
+                                            Primary
+                                        {% elif calendar.calendar_id == 'all' %}
+                                            All calendars
+                                        {% else %}
+                                            {{ calendar.calendar_id }}
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if calendar.topic_name %}
                                             <span class="badge bg-info">{{ calendar.topic_name }}</span>
