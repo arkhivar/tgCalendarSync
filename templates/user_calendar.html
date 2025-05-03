@@ -55,18 +55,11 @@
                         </div>
                         <div class="card-body">
                             <div class="row g-3">
-                                <div class="col-md-6">
+                                <div class="col-12">
                                     <label for="email" class="form-label">Email Address</label>
                                     <input type="email" class="form-control" id="email" name="email" value="{{ user_calendar.email if user_calendar else '' }}" required>
                                     <div class="form-text">
                                         The Gmail address associated with this calendar
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <label for="display_name" class="form-label">Display Name</label>
-                                    <input type="text" class="form-control" id="display_name" name="display_name" value="{{ user_calendar.display_name if user_calendar else '' }}" required>
-                                    <div class="form-text">
-                                        Name or initials to identify this user in notifications
                                     </div>
                                 </div>
                             </div>
@@ -211,7 +204,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
-                        <p>Are you sure you want to delete the calendar for <strong>{{ user_calendar.display_name }}</strong>?</p>
+                        <p>Are you sure you want to delete the calendar for <strong>{{ user_calendar.topic_name or user_calendar.email }}</strong>?</p>
                         <p class="text-danger">This action cannot be undone and will remove all stored events for this calendar.</p>
                     </div>
                     <div class="modal-footer">

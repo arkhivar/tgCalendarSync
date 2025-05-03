@@ -112,7 +112,6 @@ def handle_db_migration():
                             
                         user_calendar = UserCalendar(
                             email=email,
-                            display_name="Default User",
                             topic_name="General",  # Default topic
                             google_credentials=old_data.google_credentials,
                             calendar_id=old_data.calendar_id if hasattr(old_data, 'calendar_id') else 'primary',
