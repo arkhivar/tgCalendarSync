@@ -466,6 +466,19 @@ def telegram_webhook():
     """
     Webhook endpoint for Telegram to receive bot commands and mentions
     """
+    # Set up console handler for direct output
+    import sys
+    import logging
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.DEBUG)
+    
+    # Log the webhook call
+    logger.info("============= TELEGRAM WEBHOOK CALLED =============")
+    
     try:
         # Check that we have a valid request
         if not request.is_json:
