@@ -10,6 +10,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
 import sqlalchemy as sa
 from sqlalchemy.exc import OperationalError
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 
 # Initialize logging
 logging.basicConfig(level=logging.DEBUG)
@@ -273,6 +276,96 @@ def settings():
     settings = CalendarSettings.query.first()
     return render_template('settings.html', settings=settings)
 
+@app.route('/auth/google/<int:user_id>')
+def google_auth(user_id):
+    """Initiate the OAuth flow for Google Calendar"""
+    user_calendar = UserCalendar.query.get_or_404(user_id)
+    
+    # Get client config from form if provided, otherwise redirect to edit page
+    client_config = request.args.get('client_config')
+    if not client_config:
+        flash('Please enter your Google client configuration first', 'warning')
+        return redirect(url_for('edit_user_calendar', user_id=user_id))
+    
+    # Store client config temporarily in the session
+    session['client_config'] = client_config
+    session['user_id'] = user_id
+    
+    # Set up OAuth 2.0 flow
+    try:
+        client_config_dict = json.loads(client_config)
+        flow = InstalledAppFlow.from_client_config(
+            client_config_dict, 
+            scopes=['https://www.googleapis.com/auth/calendar.readonly'],
+            redirect_uri=url_for('google_auth_callback', _external=True)
+        )
+        
+        # Generate authorization URL
+        auth_url, _ = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true',
+            prompt='consent'  # Force to always show the consent screen
+        )
+        
+        return redirect(auth_url)
+    except Exception as e:
+        logger.error(f"Error initiating Google auth: {str(e)}")
+        flash(f"Error setting up Google authentication: {str(e)}", 'danger')
+        return redirect(url_for('edit_user_calendar', user_id=user_id))
+
+@app.route('/auth/google/callback')
+def google_auth_callback():
+    """Handle the OAuth callback from Google"""
+    try:
+        # Get the stored client config and user_id
+        client_config = session.get('client_config')
+        user_id = session.get('user_id')
+        
+        if not client_config or not user_id:
+            flash('Authentication session expired. Please try again.', 'danger')
+            return redirect(url_for('index'))
+        
+        # Get the user calendar
+        user_calendar = UserCalendar.query.get_or_404(user_id)
+        
+        # Complete the OAuth flow
+        client_config_dict = json.loads(client_config)
+        flow = InstalledAppFlow.from_client_config(
+            client_config_dict,
+            scopes=['https://www.googleapis.com/auth/calendar.readonly'],
+            redirect_uri=url_for('google_auth_callback', _external=True)
+        )
+        
+        # Use the received authorization code to fetch tokens
+        flow.fetch_token(authorization_response=request.url)
+        
+        # Get credentials and save to database
+        credentials = flow.credentials
+        credentials_json = json.dumps({
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes
+        })
+        
+        # Store the credentials in the database
+        user_calendar.google_credentials = credentials_json
+        db.session.commit()
+        
+        # Clear the session
+        session.pop('client_config', None)
+        session.pop('user_id', None)
+        
+        flash('Google Calendar authentication successful!', 'success')
+        return redirect(url_for('edit_user_calendar', user_id=user_id))
+        
+    except Exception as e:
+        logger.error(f"Error in Google auth callback: {str(e)}")
+        flash(f"Error completing Google authentication: {str(e)}", 'danger')
+        return redirect(url_for('index'))
+
 @app.route('/calendar/<int:user_id>', methods=['GET', 'POST'])
 def edit_user_calendar(user_id):
     user_calendar = UserCalendar.query.get_or_404(user_id)
@@ -280,7 +373,11 @@ def edit_user_calendar(user_id):
     if request.method == 'POST':
         user_calendar.email = request.form.get('email')
         user_calendar.topic_name = request.form.get('topic_name')
-        user_calendar.google_credentials = request.form.get('google_credentials')
+        
+        # Get client configuration but do not store it directly
+        client_config = request.form.get('google_client_config')
+        if client_config:
+            return redirect(url_for('google_auth', user_id=user_id, client_config=client_config))
         
         # Handle calendar ID selection
         calendar_id = request.form.get('calendar_id')
@@ -305,6 +402,10 @@ def edit_user_calendar(user_id):
 @app.route('/calendar/new', methods=['GET', 'POST'])
 def new_user_calendar():
     if request.method == 'POST':
+        # First create the user calendar with basic info
+        email = request.form.get('email')
+        topic_name = request.form.get('topic_name')
+        
         # Handle calendar ID selection
         calendar_id = request.form.get('calendar_id')
         if calendar_id == 'primary' or calendar_id == 'all':
@@ -317,10 +418,10 @@ def new_user_calendar():
             else:
                 final_calendar_id = 'primary'  # Default if no valid selection
         
+        # Create and save the user calendar first (without credentials)
         user_calendar = UserCalendar(
-            email=request.form.get('email'),
-            topic_name=request.form.get('topic_name'),
-            google_credentials=request.form.get('google_credentials'),
+            email=email,
+            topic_name=topic_name,
             calendar_id=final_calendar_id,
             is_active=True,
             last_check=datetime.utcnow()
@@ -329,8 +430,13 @@ def new_user_calendar():
         db.session.add(user_calendar)
         db.session.commit()
         
-        flash('New calendar added successfully!', 'success')
-        return redirect(url_for('index'))
+        # Get client configuration and redirect to OAuth flow if provided
+        client_config = request.form.get('google_client_config')
+        if client_config:
+            return redirect(url_for('google_auth', user_id=user_calendar.id, client_config=client_config))
+        
+        flash('New calendar added successfully! Please add Google credentials next.', 'warning')
+        return redirect(url_for('edit_user_calendar', user_id=user_calendar.id))
     
     return render_template('user_calendar.html', user_calendar=None)
 

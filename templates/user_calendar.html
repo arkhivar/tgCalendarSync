@@ -85,16 +85,48 @@
                             <h3 class="card-title mb-0"><i class="bi bi-google me-2"></i>Google Calendar Credentials</h3>
                         </div>
                         <div class="card-body">
+                            {% if user_calendar and user_calendar.google_credentials %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-check-circle me-2"></i>
+                                    This calendar is already authenticated with Google. You can re-authenticate if needed.
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Authentication Status</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-success text-white">
+                                            <i class="bi bi-shield-check me-1"></i> Authenticated
+                                        </span>
+                                        <input type="text" class="form-control" value="Google Calendar authentication successful" disabled>
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
                             <div class="mb-3">
-                                <label for="google_credentials" class="form-label">Google API Credentials (JSON)</label>
-                                <textarea class="form-control" id="google_credentials" name="google_credentials" rows="10" required>{{ user_calendar.google_credentials if user_calendar else '' }}</textarea>
+                                <label for="google_client_config" class="form-label">Google OAuth Client Credentials (JSON)</label>
+                                <textarea class="form-control" id="google_client_config" name="google_client_config" rows="10" {% if not user_calendar or not user_calendar.google_credentials %}required{% endif %}></textarea>
                                 <div class="form-text">
-                                    Paste the Google API credentials JSON here. 
-                                    <a href="https://developers.google.com/calendar/api/quickstart/python" target="_blank">
-                                        Learn how to get credentials
+                                    <strong>Step 1:</strong> Paste your OAuth Client JSON (from Google Cloud) here. 
+                                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank">
+                                        Get from Google Cloud Console
                                     </a>
                                 </div>
                             </div>
+                            
+                            {% if user_calendar and user_calendar.id %}
+                                <div class="mb-3">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        <strong>Step 2:</strong> After saving, you'll be redirected to Google to authorize access to your calendar.
+                                    </div>
+                                </div>
+                            {% else %}
+                                <div class="mb-3">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        <strong>Step 2:</strong> After saving, you'll be redirected to Google to complete authentication.
+                                    </div>
+                                </div>
+                            {% endif %}
                             
                             <div class="mb-3">
                                 <label for="calendar_id" class="form-label">Calendar ID</label>
@@ -154,17 +186,27 @@
                         </h2>
                         <div id="collapseGoogle" class="accordion-collapse collapse show" data-bs-parent="#setupAccordion">
                             <div class="accordion-body">
+                                <h4>Step 1: Create OAuth Client Credentials</h4>
                                 <ol>
-                                    <li>Go to the <a href="https://console.developers.google.com/" target="_blank">Google Developers Console</a></li>
-                                    <li>Create a new project</li>
+                                    <li>Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console Credentials</a> page</li>
+                                    <li>Create a new project (or select an existing one)</li>
                                     <li>Enable the Google Calendar API for your project</li>
-                                    <li>Create OAuth 2.0 credentials (Desktop application type)</li>
-                                    <li>Download the credentials JSON file</li>
-                                    <li>Copy and paste the entire contents of the JSON file into the Google API Credentials field</li>
+                                    <li>Create OAuth 2.0 Client ID (select "Web application" type)</li>
+                                    <li>Set Authorized redirect URIs to match this application's domain (e.g., https://your-domain.com/auth/google/callback)</li>
+                                    <li>Download the JSON file and paste the <strong>entire contents</strong> into the form</li>
                                 </ol>
-                                <div class="alert alert-info">
-                                    <i class="bi bi-info-circle me-2"></i>
-                                    <strong>Note:</strong> For shared calendars, you need to use credentials for an account that has access to that calendar.
+                                
+                                <h4>Step 2: Complete OAuth Authorization</h4>
+                                <ol>
+                                    <li>After submitting the form, you'll be redirected to Google's login page</li>
+                                    <li>Sign in with the Gmail account that has access to the calendars you want to monitor</li>
+                                    <li>Grant permission to view your calendars</li>
+                                    <li>You'll be redirected back to this application with proper authentication complete</li>
+                                </ol>
+                                
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                    <strong>Important:</strong> The Gmail account you authorize must have access to the calendars you want to monitor.
                                 </div>
                             </div>
                         </div>
