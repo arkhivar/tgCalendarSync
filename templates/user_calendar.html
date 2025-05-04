@@ -112,13 +112,49 @@
                                 </div>
                             </div>
                             
-                            {% if user_calendar and user_calendar.id %}
-                                <div class="mb-3">
-                                    <div class="alert alert-info">
-                                        <i class="bi bi-info-circle me-2"></i>
-                                        <strong>Step 2:</strong> After saving, you'll be redirected to Google to authorize access to your calendar.
+                            <div class="alert alert-warning">
+                                <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Important: Two-Step Authentication Process</h5>
+                                <p>Google Calendar authentication requires <strong>two steps</strong> to complete:</p>
+                                <ol>
+                                    <li><strong>Save the settings</strong> with your OAuth Client JSON from Google Cloud</li>
+                                    <li>After saving, you'll be <strong>redirected to Google</strong> to authorize access</li>
+                                </ol>
+                                <p class="mb-0">
+                                    <span class="badge bg-danger">Common Issue</span> 
+                                    If you don't complete the second step, the calendar monitor will not have permission to access your calendar.
+                                </p>
+                            </div>
+                            
+                            {% if user_calendar and user_calendar.google_credentials %}
+                                {% set cred_status = 'unknown' %}
+                                {% set cred_json = user_calendar.google_credentials|tojson %}
+                                {% if '"installed"' in cred_json or '"web"' in cred_json %}
+                                    {% set cred_status = 'client_config' %}
+                                {% elif '"refresh_token"' in cred_json and '"token"' in cred_json %}
+                                    {% set cred_status = 'valid' %}
+                                {% else %}
+                                    {% set cred_status = 'invalid' %}
+                                {% endif %}
+                                
+                                {% if cred_status == 'client_config' %}
+                                    <div class="alert alert-danger">
+                                        <h5><i class="bi bi-x-circle-fill me-2"></i>Authentication Incomplete</h5>
+                                        <p>You've uploaded client configuration but haven't completed OAuth authorization with Google.</p>
+                                        <a href="{{ url_for('google_auth', user_id=user_calendar.id, client_config=user_calendar.google_credentials) }}" class="btn btn-warning">
+                                            <i class="bi bi-google me-1"></i> Complete Google Authentication Now
+                                        </a>
                                     </div>
-                                </div>
+                                {% elif cred_status == 'valid' %}
+                                    <div class="alert alert-success">
+                                        <h5><i class="bi bi-check-circle-fill me-2"></i>Authentication Complete</h5>
+                                        <p>This calendar has valid authentication credentials with Google Calendar API.</p>
+                                    </div>
+                                {% elif cred_status == 'invalid' %}
+                                    <div class="alert alert-danger">
+                                        <h5><i class="bi bi-x-circle-fill me-2"></i>Invalid Credentials</h5>
+                                        <p>The stored credentials appear to be invalid. Please upload new client configuration and complete the OAuth flow.</p>
+                                    </div>
+                                {% endif %}
                             {% else %}
                                 <div class="mb-3">
                                     <div class="alert alert-info">

@@ -66,6 +66,26 @@
                 </div>
                 {% endif %}
                 
+                {% if credential_status and user_calendars %}
+                    <div class="alert alert-warning" role="alert">
+                        <h4><i class="bi bi-exclamation-triangle-fill me-2"></i>Authentication Incomplete</h4>
+                        <p>The following calendars have client configuration but haven't completed the Google authentication process:</p>
+                        <ul>
+                            {% for calendar in user_calendars %}
+                                {% if credential_status[calendar.id] == 'client_config' %}
+                                <li>
+                                    <strong>{{ calendar.email }}</strong> - 
+                                    <a href="{{ url_for('google_auth', user_id=calendar.id, client_config=calendar.google_credentials) }}" class="btn btn-sm btn-warning">
+                                        <i class="bi bi-google"></i> Complete Authentication
+                                    </a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+                        </ul>
+                        <p class="mb-0">Click the buttons above to complete Google OAuth authentication for each calendar.</p>
+                    </div>
+                {% endif %}
+                
                 <!-- Calendars list -->
                 <h3 class="mt-4 mb-3"><i class="bi bi-calendar3 me-2"></i>Monitored Calendars</h3>
                 
@@ -107,11 +127,33 @@
                                         {% else %}
                                             <span class="badge bg-secondary">Inactive</span>
                                         {% endif %}
+                                        
+                                        {% if credential_status and calendar.id in credential_status %}
+                                            {% if credential_status[calendar.id] == 'valid' %}
+                                                <span class="badge bg-success">Authenticated</span>
+                                            {% elif credential_status[calendar.id] == 'client_config' %}
+                                                <span class="badge bg-warning">Authentication Incomplete</span>
+                                            {% elif credential_status[calendar.id] == 'missing' %}
+                                                <span class="badge bg-danger">No Credentials</span>
+                                            {% elif credential_status[calendar.id] == 'invalid' %}
+                                                <span class="badge bg-danger">Invalid Credentials</span>
+                                            {% endif %}
+                                        {% endif %}
                                     </td>
                                     <td>
-                                        <a href="{{ url_for('edit_user_calendar', user_id=calendar.id) }}" class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-pencil"></i> Edit
-                                        </a>
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ url_for('edit_user_calendar', user_id=calendar.id) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </a>
+                                            
+                                            {% if credential_status and calendar.id in credential_status %}
+                                                {% if credential_status[calendar.id] == 'client_config' %}
+                                                    <a href="{{ url_for('google_auth', user_id=calendar.id, client_config=calendar.google_credentials) }}" class="btn btn-sm btn-warning">
+                                                        <i class="bi bi-google"></i> Complete Auth
+                                                    </a>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
