@@ -169,50 +169,67 @@ def scheduled_calendar_check():
                 if not user_calendar.google_credentials:
                     logger.warning(f"No Google credentials for user {user_calendar.email}, skipping")
                     continue
-                    
-                # Check for calendar changes for this user
-                changes = check_calendar_changes(
-                    user_calendar.google_credentials,
-                    user_calendar.calendar_id,
-                    user_calendar.id
-                )
                 
-                if changes:
-                    # Determine the topic name to use
-                    topic_name = None
-                    if settings.is_supergroup and user_calendar.topic_name:
-                        topic_name = user_calendar.topic_name
-                        
-                        # Make sure the topic exists
-                        create_topic_if_not_exists(
-                            settings.telegram_bot_token, 
-                            settings.chat_id, 
-                            topic_name
-                        )
+                # Check if this is client config rather than user credentials
+                credentials_info = None
+                try:
+                    credentials_info = json.loads(user_calendar.google_credentials)
+                    if 'installed' in credentials_info or 'web' in credentials_info:
+                        logger.error(f"User {user_calendar.email} has client config, not user credentials. Authentication incomplete.")
+                        continue
+                except json.JSONDecodeError:
+                    logger.error(f"Invalid JSON in credentials for user {user_calendar.email}")
+                    continue
+                
+                # If credentials look valid, proceed with check
+                try:
+                    # Check for calendar changes for this user
+                    changes = check_calendar_changes(
+                        user_calendar.google_credentials,
+                        user_calendar.calendar_id,
+                        user_calendar.id
+                    )
                     
-                    # Send notifications for each change
-                    for change in changes:
-                        message = change['message']
+                    if changes:
+                        # Determine the topic name to use
+                        topic_name = None
+                        if settings.is_supergroup and user_calendar.topic_name:
+                            topic_name = user_calendar.topic_name
+                            
+                            # Make sure the topic exists
+                            create_topic_if_not_exists(
+                                settings.telegram_bot_token, 
+                                settings.chat_id, 
+                                topic_name
+                            )
                         
-                        # If using a supergroup but no topic was specified for this user,
-                        # prefix the message with the user's email
-                        if settings.is_supergroup and not topic_name:
-                            prefix = user_calendar.email.split('@')[0]
-                            message = f"[{prefix}] {message}"
+                        # Send notifications for each change
+                        for change in changes:
+                            message = change['message']
+                            
+                            # If using a supergroup but no topic was specified for this user,
+                            # prefix the message with the user's email
+                            if settings.is_supergroup and not topic_name:
+                                prefix = user_calendar.email.split('@')[0]
+                                message = f"[{prefix}] {message}"
+                            
+                            logger.info(f"Calendar change detected for {user_calendar.email}: {message[:50]}...")
+                            
+                            # Send the message
+                            send_telegram_message(
+                                settings.telegram_bot_token,
+                                settings.chat_id,
+                                message,
+                                topic_name
+                            )
                         
-                        logger.info(f"Calendar change detected for {user_calendar.email}: {message[:50]}...")
-                        
-                        # Send the message
-                        send_telegram_message(
-                            settings.telegram_bot_token,
-                            settings.chat_id,
-                            message,
-                            topic_name
-                        )
-                        
-                # Update the last check time
-                user_calendar.last_check = datetime.utcnow()
-                db.session.commit()
+                    # Update the last check time
+                    user_calendar.last_check = datetime.utcnow()
+                    db.session.commit()
+                
+                except Exception as e:
+                    logger.error(f"Error checking calendar for user {user_calendar.email}: {str(e)}")
+                    continue
                         
         except Exception as e:
             logger.error(f"Error in scheduled calendar check: {str(e)}")
@@ -220,22 +237,55 @@ def scheduled_calendar_check():
             logger.error(traceback.format_exc())
 
 # Routes definition
+def check_user_credentials(user_calendar):
+    """
+    Check if user calendar has proper credentials or only client config
+    
+    Returns:
+    - 'valid': User has valid credentials
+    - 'client_config': User has client config only, needs OAuth
+    - 'missing': No credentials at all
+    - 'invalid': Invalid JSON
+    """
+    if not user_calendar.google_credentials:
+        return 'missing'
+        
+    try:
+        credentials_info = json.loads(user_calendar.google_credentials)
+        
+        # Check if this contains client config only
+        if 'installed' in credentials_info or 'web' in credentials_info:
+            return 'client_config'
+            
+        # Check for essential user credential fields
+        if all(key in credentials_info for key in ['token', 'refresh_token', 'client_id', 'client_secret']):
+            return 'valid'
+        else:
+            return 'invalid'
+            
+    except json.JSONDecodeError:
+        return 'invalid'
+
 @app.route('/')
 def index():
     settings = CalendarSettings.query.first()
     user_calendars = UserCalendar.query.all()
     
+    # Check each calendar for appropriate credentials
+    credential_status = {cal.id: check_user_credentials(cal) for cal in user_calendars}
+    
     is_configured = (settings is not None and 
                     settings.telegram_bot_token and 
                     settings.chat_id and 
                     len(user_calendars) > 0 and 
-                    any(cal.google_credentials for cal in user_calendars))
+                    any(credential_status[cal.id] == 'valid' for cal in user_calendars))
                     
     return render_template(
         'index.html', 
         is_configured=is_configured,
         settings=settings,
-        user_calendars=user_calendars
+        user_calendars=user_calendars,
+        credential_status=credential_status
     )
 
 @app.route('/settings', methods=['GET', 'POST'])
