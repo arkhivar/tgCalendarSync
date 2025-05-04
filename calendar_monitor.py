@@ -213,6 +213,9 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                 user_calendar_id=user_calendar_id
             ).first()
             
+            # Force detection of updates for debugging
+            has_changes = False
+            
             if not existing_event:
                 # New event
                 new_event = EventRecord(
@@ -259,13 +262,36 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                     changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
                     existing_event.summary = summary
                 
-                if existing_event.start_time != start_time:
+                # Handle datetime comparison carefully to avoid issues with microseconds
+                start_time_changed = False
+                if existing_event.start_time and start_time:
+                    # Compare only up to minutes for more reliable comparison
+                    existing_time_str = existing_event.start_time.strftime('%Y-%m-%d %H:%M')
+                    new_time_str = start_time.strftime('%Y-%m-%d %H:%M')
+                    start_time_changed = existing_time_str != new_time_str
+                else:
+                    # One is None and the other isn't, definitely changed
+                    start_time_changed = existing_event.start_time != start_time
+                
+                if start_time_changed:
                     old_time = existing_event.start_time.strftime('%Y-%m-%d %H:%M') if existing_event.start_time else 'Unknown'
                     new_time = start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'
                     changes_desc.append(f"Start time changed from {old_time} to {new_time}")
                     existing_event.start_time = start_time
                 
-                if existing_event.end_time != end_time:
+                # Handle end time comparison the same way
+                end_time_changed = False
+                if existing_event.end_time and end_time:
+                    existing_end_str = existing_event.end_time.strftime('%Y-%m-%d %H:%M')
+                    new_end_str = end_time.strftime('%Y-%m-%d %H:%M')
+                    end_time_changed = existing_end_str != new_end_str
+                else:
+                    end_time_changed = existing_event.end_time != end_time
+                
+                if end_time_changed:
+                    old_time = existing_event.end_time.strftime('%Y-%m-%d %H:%M') if existing_event.end_time else 'Unknown'
+                    new_time = end_time.strftime('%Y-%m-%d %H:%M') if end_time else 'Unknown'
+                    changes_desc.append(f"End time changed from {old_time} to {new_time}")
                     existing_event.end_time = end_time
                 
                 if existing_event.location != location:

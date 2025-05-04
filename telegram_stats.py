@@ -79,14 +79,18 @@ def get_calendar_stats(days=30):
         }
     except Exception as e:
         logger.error(f"Error getting calendar stats: {str(e)}")
+        # Ensure we have default values for start_date and end_date
+        end_date_default = datetime.utcnow()
+        start_date_default = end_date_default - timedelta(days=days)
+        
         return {
             'error': str(e),
             'total_events': 0,
             'changes_by_calendar': {},
             'changes_by_email': {},
             'most_active_day': {},
-            'start_date': start_date,
-            'end_date': end_date
+            'start_date': start_date_default,
+            'end_date': end_date_default
         }
 
 def format_stats_message(stats, days=30):
@@ -161,7 +165,7 @@ def handle_bot_mention(message_text):
             if word == "stats" and i+1 < len(words):
                 try:
                     requested_days = int(words[i+1])
-                    if 1 <= requested_days <= this:
+                    if 1 <= requested_days <= 365:  # Limit to 365 days
                         days = requested_days
                 except:
                     pass

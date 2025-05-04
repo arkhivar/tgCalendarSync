@@ -146,6 +146,7 @@ def handle_db_migration():
 from models import CalendarSettings, UserCalendar, EventRecord  
 from calendar_monitor import check_calendar_changes
 from telegram_notifier import send_telegram_message, create_topic_if_not_exists
+from telegram_stats import process_telegram_update
 
 # Create a function to check for calendar changes
 def scheduled_calendar_check():
