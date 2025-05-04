@@ -23,6 +23,12 @@ def get_google_service(credentials_json):
         # Parse the JSON string into a dictionary
         credentials_info = json.loads(credentials_json)
         
+        # Check if this is a client config or actual credentials
+        if 'installed' in credentials_info or 'web' in credentials_info:
+            # This is client config, not user credentials
+            logger.error("Received client configuration instead of user credentials")
+            raise ValueError("The stored credentials are OAuth client configuration, not authorized user credentials. Please complete the Google OAuth authentication flow.")
+        
         # Create credentials from the parsed JSON
         credentials = Credentials.from_authorized_user_info(credentials_info, SCOPES)
         
