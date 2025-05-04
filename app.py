@@ -461,6 +461,51 @@ def run_now():
     flash('Calendar check executed!', 'success')
     return redirect(url_for('index'))
 
+@app.route('/webhook/telegram', methods=['POST'])
+def telegram_webhook():
+    """
+    Webhook endpoint for Telegram to receive bot commands and mentions
+    """
+    try:
+        # Check that we have a valid request
+        if not request.is_json:
+            logger.warning("Invalid webhook request: not JSON")
+            return "Bad Request", 400
+            
+        # Get the update from Telegram
+        update = request.get_json()
+        print(f"DEBUG: Received Telegram update: {update}")
+        logger.info(f"Received Telegram update: {update}")
+        
+        # Process the update
+        print(f"DEBUG: Processing update with process_telegram_update")
+        response = process_telegram_update(update)
+        print(f"DEBUG: Got response: {response}")
+        
+        # If there's a response, send it back to Telegram
+        if response:
+            settings = CalendarSettings.query.first()
+            if not settings or not settings.telegram_bot_token:
+                logger.warning("Cannot send response: no Telegram token configured")
+                return "OK", 200
+                
+            # Send the response back to Telegram
+            bot_token = settings.telegram_bot_token
+            chat_id = response.get('chat_id')
+            text = response.get('text')
+            parse_mode = response.get('parse_mode', 'Markdown')
+            
+            if chat_id and text:
+                send_telegram_message(bot_token, chat_id, text, None, parse_mode)
+            
+        return "OK", 200
+        
+    except Exception as e:
+        logger.error(f"Error processing Telegram webhook: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return "Internal Server Error", 500
+
 # Initialize database tables and start scheduler
 with app.app_context():
     try:

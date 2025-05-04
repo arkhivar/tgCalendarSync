@@ -6,7 +6,7 @@ from urllib.parse import quote
 # Set up logging
 logger = logging.getLogger(__name__)
 
-def send_telegram_message(bot_token, chat_id, message, topic_name=None):
+def send_telegram_message(bot_token, chat_id, message, topic_name=None, parse_mode="Markdown"):
     """
     Send a message to a Telegram chat or supergroup with optional topic
     
@@ -15,6 +15,7 @@ def send_telegram_message(bot_token, chat_id, message, topic_name=None):
         chat_id (str): The chat ID to send the message to
         message (str): The message to send
         topic_name (str, optional): The topic name for supergroups
+        parse_mode (str, optional): The parse mode for the message (Markdown or HTML)
     
     Returns:
         bool: True if message was sent successfully, False otherwise
@@ -34,7 +35,7 @@ def send_telegram_message(bot_token, chat_id, message, topic_name=None):
         params = {
             "chat_id": chat_id,
             "text": message,
-            "parse_mode": "Markdown"
+            "parse_mode": parse_mode
         }
         
         # If topic name is provided, try to get the message thread ID

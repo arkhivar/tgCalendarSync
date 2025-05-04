@@ -198,38 +198,55 @@ def process_telegram_update(update):
         dict or None: Response to send back to Telegram, or None if no response
     """
     try:
+        # Add detailed debug logging
+        print(f"DEBUG: process_telegram_update received update: {update}")
+        
         # Check if this is a message
         if 'message' not in update:
+            print("DEBUG: No message in update")
             return None
             
         message = update['message']
+        print(f"DEBUG: Message content: {message}")
         
         # Check if message has text
         if 'text' not in message:
+            print("DEBUG: No text in message")
             return None
             
         # Get message text and check if it mentions the bot
         message_text = message['text']
+        print(f"DEBUG: Message text: {message_text}")
+        
         settings = CalendarSettings.query.first()
         
         if not settings or not settings.telegram_bot_token:
+            print("DEBUG: No bot token configured")
             return None
             
         # Get bot username if not set
         bot_username = "calendaringBot"  # Default fallback
+        print(f"DEBUG: Using bot username: {bot_username}")
             
         # Check if the message mentions the bot
         if f"@{bot_username}" in message_text:
+            print(f"DEBUG: Bot mentioned in: {message_text}")
+            
             # Handle the mention
             response_text = handle_bot_mention(message_text)
+            print(f"DEBUG: Response from handle_bot_mention: {response_text}")
             
             # If there's a response, send it back to the same chat
             if response_text:
-                return {
+                response = {
                     'chat_id': message['chat']['id'],
                     'text': response_text,
                     'parse_mode': 'Markdown'
                 }
+                print(f"DEBUG: Returning response: {response}")
+                return response
+        else:
+            print(f"DEBUG: Bot not mentioned in message")
                 
         return None
             
