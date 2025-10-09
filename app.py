@@ -207,6 +207,39 @@ def debug_env():
                    if 'google' in k.lower() or 'calendar' in k.lower() or 'replit_db' in k.lower()}
     return f"<pre>{json.dumps(google_vars, indent=2)}</pre>"
 
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    if request.method == 'POST':
+        telegram_bot_token = request.form.get('telegram_bot_token')
+        chat_id = request.form.get('chat_id')
+        is_supergroup = 'is_supergroup' in request.form
+        check_interval = int(request.form.get('check_interval', 15))
+        
+        settings = CalendarSettings.query.first()
+        
+        if not settings:
+            settings = CalendarSettings(
+                telegram_bot_token=telegram_bot_token,
+                chat_id=chat_id,
+                is_supergroup=is_supergroup,
+                check_interval=check_interval,
+                last_check=datetime.utcnow()
+            )
+            db.session.add(settings)
+        else:
+            settings.telegram_bot_token = telegram_bot_token
+            settings.chat_id = chat_id
+            settings.is_supergroup = is_supergroup
+            settings.check_interval = check_interval
+        
+        db.session.commit()
+        
+        # Reschedule the job with the new interval
+        if scheduler.get_jobs():
+            scheduler.remove_all_jobs()
+        
+        scheduler.add_job(scheduled_calendar_check, 'interval', minutes=check_interval)
+        
         flash('Settings updated successfully!', 'success')
         return redirect(url_for('index'))
     
