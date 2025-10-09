@@ -74,6 +74,7 @@ from models import CalendarSettings, EventRecord
 from calendar_monitor import check_calendar_changes
 from telegram_notifier import send_telegram_message, create_topic_if_not_exists
 from telegram_stats import process_telegram_update
+from google_connector import get_access_token, get_user_email
 
 # Create a function to check for calendar changes
 def scheduled_calendar_check():
@@ -82,11 +83,6 @@ def scheduled_calendar_check():
             settings = CalendarSettings.query.first()
             if not settings or not settings.telegram_bot_token or not settings.chat_id:
                 logger.warning("Settings not configured, skipping calendar check")
-                return
-            
-            # Check if Google Calendar connector is configured
-            if not (os.environ.get('google_calendar_access_token') or os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')):
-                logger.error("Google Calendar connector not configured. Please set up the connector in Replit.")
                 return
                 
             logger.info("Running scheduled calendar check")
@@ -138,18 +134,16 @@ def index():
     settings = CalendarSettings.query.first()
     
     # Check if Google Calendar connector is configured
-    # Replit connectors typically use REPLIT_DB_GOOGLE_CALENDAR prefix
-    google_connected = bool(
-        os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_ACCESS_TOKEN') or 
-        os.environ.get('google_calendar_access_token') or 
-        os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')
-    )
-    google_email = (
-        os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_USER_EMAIL') or
-        os.environ.get('google_calendar_user_email') or 
-        os.environ.get('GOOGLE_CALENDAR_USER_EMAIL') or
-        'Not configured'
-    )
+    google_connected = False
+    google_email = 'Not configured'
+    
+    try:
+        # Try to get access token to verify connection
+        get_access_token()
+        google_connected = True
+        google_email = get_user_email()
+    except Exception as e:
+        logger.debug(f"Google Calendar not connected: {str(e)}")
     
     is_configured = (settings is not None and 
                     settings.telegram_bot_token and 
