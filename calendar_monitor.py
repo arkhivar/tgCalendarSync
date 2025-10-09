@@ -1,12 +1,11 @@
+
 import os
 import logging
 import json
 from datetime import datetime, timedelta
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
-from models import EventRecord, CalendarSettings, UserCalendar
+from models import EventRecord, CalendarSettings
 from app import db
 
 # Set up logging
@@ -15,26 +14,29 @@ logger = logging.getLogger(__name__)
 # Google Calendar API scopes
 SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
-def get_google_service(credentials_json):
+def get_google_service():
     """
-    Create and return a Google Calendar API service using provided credentials
+    Create and return a Google Calendar API service using Replit connector credentials
     """
     try:
-        # Parse the JSON string into a dictionary
-        credentials_info = json.loads(credentials_json)
+        # Get credentials from Replit connector environment variables
+        token = os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')
+        refresh_token = os.environ.get('GOOGLE_CALENDAR_REFRESH_TOKEN')
+        client_id = os.environ.get('GOOGLE_CALENDAR_CLIENT_ID')
+        client_secret = os.environ.get('GOOGLE_CALENDAR_CLIENT_SECRET')
         
-        # Check if this is a client config or actual credentials
-        if 'installed' in credentials_info or 'web' in credentials_info:
-            # This is client config, not user credentials
-            logger.error("Received client configuration instead of user credentials")
-            raise ValueError("The stored credentials are OAuth client configuration, not authorized user credentials. Please complete the Google OAuth authentication flow.")
+        if not all([token, client_id, client_secret]):
+            raise ValueError("Google Calendar connector credentials not found. Please ensure the connector is properly configured.")
         
-        # Create credentials from the parsed JSON
-        credentials = Credentials.from_authorized_user_info(credentials_info, SCOPES)
-        
-        # If credentials are expired and there's a refresh token, refresh them
-        if credentials.expired and credentials.refresh_token:
-            credentials.refresh(Request())
+        # Create credentials object
+        credentials = Credentials(
+            token=token,
+            refresh_token=refresh_token,
+            token_uri='https://oauth2.googleapis.com/token',
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=SCOPES
+        )
         
         # Build the service
         service = build('calendar', 'v3', credentials=credentials)
@@ -128,21 +130,16 @@ def get_creator_info(event):
     
     return creator.get('email', ''), creator.get('displayName', '')
 
-def check_calendar_changes(credentials_json, calendar_id='primary', user_calendar_id=None):
+def check_calendar_changes():
     """
-    Check for changes in the calendar and return a list of changes
+    Check for changes in all calendars and return a list of changes
     
-    Args:
-        credentials_json (str): The Google credentials JSON string
-        calendar_id (str): The ID of the calendar to check, or 'all' to check all calendars
-        user_calendar_id (int): The ID of the UserCalendar record
-        
     Returns:
-        list: A list of changes detected in the calendar
+        list: A list of changes detected in the calendars
     """
     try:
-        # Get Google Calendar service
-        service = get_google_service(credentials_json)
+        # Get Google Calendar service using Replit connector
+        service = get_google_service()
         
         # List to store changes
         changes = []
@@ -150,44 +147,33 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
         # Current time
         current_time = datetime.utcnow()
         
-        # Get the user calendar
-        user_calendar = None
-        if user_calendar_id:
-            user_calendar = UserCalendar.query.get(user_calendar_id)
+        # Primary account email
+        primary_email = os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'speakenglishoffice@gmail.com')
         
-        if not user_calendar:
-            logger.error(f"UserCalendar with ID {user_calendar_id} not found")
-            return changes
-            
-        # User email for looking up event creators
-        user_email = user_calendar.email.lower() if user_calendar.email else ''
+        # Get all calendars
+        calendars = get_user_calendars(service)
+        logger.info(f"Found {len(calendars)} calendars")
         
-        # Get all events from all calendars if 'all' is specified
-        events = []
-        if calendar_id == 'all':
-            # Get all calendars the user has access to
-            calendars = get_user_calendars(service)
-            logger.info(f"Found {len(calendars)} calendars for user {user_email}")
+        # Get events from each calendar
+        all_events = []
+        for calendar in calendars:
+            cal_id = calendar.get('id')
+            logger.debug(f"Getting events for calendar {cal_id}")
+            calendar_events = get_calendar_events(service, cal_id)
+            for event in calendar_events:
+                event['sourceCalendarId'] = cal_id  # Track which calendar this came from
+            all_events.extend(calendar_events)
             
-            # Get events from each calendar
-            for calendar in calendars:
-                cal_id = calendar.get('id')
-                logger.debug(f"Getting events for calendar {cal_id}")
-                calendar_events = get_calendar_events(service, cal_id)
-                events.extend(calendar_events)
-                
-            logger.info(f"Retrieved {len(events)} events from all calendars")
-        else:
-            # Get events from the specified calendar
-            events = get_calendar_events(service, calendar_id)
+        logger.info(f"Retrieved {len(all_events)} events from all calendars")
         
         # Process each event
-        for event in events:
+        for event in all_events:
             event_id = event.get('id')
             summary = event.get('summary', 'No Title')
             description = event.get('description', '')
             location = event.get('location', '')
             status = event.get('status', '')
+            source_calendar_id = event.get('sourceCalendarId', 'primary')
             
             # Parse start and end times
             start_time = None
@@ -209,24 +195,21 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
             creator_email, creator_name = get_creator_info(event)
             creator_info = ""
             
-            # Only add creator info if it's not the user's own email
-            if creator_email and creator_email.lower() != user_email:
+            # Only add creator info if it's not the primary account
+            if creator_email and creator_email.lower() != primary_email.lower():
                 creator_info = f"\n👤 Modified by: {creator_name or creator_email}\n"
             
             # Check if this event exists in our database
             existing_event = EventRecord.query.filter_by(
-                event_id=event_id, 
-                user_calendar_id=user_calendar_id
+                event_id=event_id,
+                calendar_id=source_calendar_id
             ).first()
-            
-            # Force detection of updates for debugging
-            has_changes = False
             
             if not existing_event:
                 # New event
                 new_event = EventRecord(
                     event_id=event_id,
-                    user_calendar_id=user_calendar_id,
+                    calendar_id=source_calendar_id,
                     summary=summary,
                     description=description,
                     location=location,
@@ -243,8 +226,8 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                 message = f"🆕 New event added: {summary}\n"
                 message += f"📅 Date: {start_time_str}\n"
                 
-                # Add calendar name if it's available and not the default
-                if 'calendarName' in event and event['calendarName'] not in ['primary', calendar_id]:
+                # Add calendar name if it's available
+                if 'calendarName' in event:
                     message += f"📆 Calendar: {event['calendarName']}\n"
                 
                 if location:
@@ -256,27 +239,25 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                 changes.append({
                     'type': 'added',
                     'event': new_event,
-                    'message': message
+                    'message': message,
+                    'calendar_name': event.get('calendarName', source_calendar_id)
                 })
                 
             elif updated_time and existing_event.last_updated and updated_time > existing_event.last_updated:
                 # Event was updated
-                # Check what changed
                 changes_desc = []
                 
                 if existing_event.summary != summary:
                     changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
                     existing_event.summary = summary
                 
-                # Handle datetime comparison carefully to avoid issues with microseconds
+                # Handle datetime comparison
                 start_time_changed = False
                 if existing_event.start_time and start_time:
-                    # Compare only up to minutes for more reliable comparison
                     existing_time_str = existing_event.start_time.strftime('%Y-%m-%d %H:%M')
                     new_time_str = start_time.strftime('%Y-%m-%d %H:%M')
                     start_time_changed = existing_time_str != new_time_str
                 else:
-                    # One is None and the other isn't, definitely changed
                     start_time_changed = existing_event.start_time != start_time
                 
                 if start_time_changed:
@@ -285,7 +266,7 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                     changes_desc.append(f"Start time changed from {old_time} to {new_time}")
                     existing_event.start_time = start_time
                 
-                # Handle end time comparison the same way
+                # Handle end time comparison
                 end_time_changed = False
                 if existing_event.end_time and end_time:
                     existing_end_str = existing_event.end_time.strftime('%Y-%m-%d %H:%M')
@@ -316,12 +297,10 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                 
                 # Only create a notification if there were actual changes
                 if changes_desc:
-                    # Create notification message
                     message = f"🔄 Event updated: {summary}\n"
                     message += f"📅 Date: {start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'}\n"
                     
-                    # Add calendar name if it's available and not the default
-                    if 'calendarName' in event and event['calendarName'] not in ['primary', calendar_id]:
+                    if 'calendarName' in event:
                         message += f"📆 Calendar: {event['calendarName']}\n"
                     
                     message += "Changes:\n"
@@ -335,38 +314,33 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
                     changes.append({
                         'type': 'updated',
                         'event': existing_event,
-                        'message': message
+                        'message': message,
+                        'calendar_name': event.get('calendarName', source_calendar_id)
                     })
         
         # Check for deleted events
-        # Get all event IDs from the database for this user calendar
-        db_event_ids = {event.event_id for event in EventRecord.query.filter_by(user_calendar_id=user_calendar_id).all()}
+        db_event_ids = {(event.event_id, event.calendar_id) for event in EventRecord.query.all()}
+        api_event_ids = {(event.get('id'), event.get('sourceCalendarId')) for event in all_events}
         
-        # Get all event IDs from the API response
-        api_event_ids = {event.get('id') for event in events}
-        
-        # Find events that are in the database but not in the API response
-        # (potentially deleted or moved outside the time range)
         deleted_event_ids = db_event_ids - api_event_ids
         
-        for event_id in deleted_event_ids:
+        for event_id, cal_id in deleted_event_ids:
             deleted_event = EventRecord.query.filter_by(
-                event_id=event_id, 
-                user_calendar_id=user_calendar_id
+                event_id=event_id,
+                calendar_id=cal_id
             ).first()
             
             if deleted_event:
                 # Check if the event's end time is in the future
-                # If it is, it might have been deleted. If not, it might just be in the past
                 if deleted_event.end_time and deleted_event.end_time > current_time:
-                    # Create notification message
                     message = f"❌ Event deleted: {deleted_event.summary}\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
                     
                     changes.append({
                         'type': 'deleted',
                         'event': deleted_event,
-                        'message': message
+                        'message': message,
+                        'calendar_name': cal_id
                     })
                 
                 # Remove the event from the database
@@ -381,4 +355,3 @@ def check_calendar_changes(credentials_json, calendar_id='primary', user_calenda
         logger.error(f"Error checking calendar changes: {str(e)}")
         db.session.rollback()
         raise
-

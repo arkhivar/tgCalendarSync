@@ -1,232 +1,126 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Calendar Telegram Notifier</title>
-    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <title>Calendar Monitor - Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container py-4">
-        <header class="pb-3 mb-4 border-bottom">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-calendar-check fs-2 me-3 text-primary"></i>
-                <h1 class="fs-4">Google Calendar Telegram Notifier</h1>
-            </div>
-        </header>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-calendar-check me-2"></i>Calendar Monitor
+            </a>
+        </div>
+    </nav>
 
-        <!-- Flash messages -->
+    <div class="container mt-4">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
                 {% endfor %}
             {% endif %}
         {% endwith %}
 
-        <div class="p-4 mb-4 bg-body-tertiary rounded-3">
-            <div class="container-fluid py-3">
-                <h2 class="fw-bold mb-3">Monitor Multiple Calendars</h2>
-                <p class="fs-5">
-                    This application monitors Google Calendars for changes (additions, modifications, deletions) 
-                    and sends notifications to your Telegram account or supergroup.
-                </p>
-                <p>Perfect for shared calendars where you want to know when changes are made by others.</p>
-                
-                {% if is_configured %}
-                <div class="alert alert-success" role="alert">
-                    <i class="bi bi-check-circle-fill me-2"></i>
-                    The application is configured and running. Calendar changes will be sent to Telegram.
-                </div>
-                <div class="d-flex gap-2 mb-4">
-                    <a href="{{ url_for('settings') }}" class="btn btn-primary">
-                        <i class="bi bi-telegram me-1"></i> Telegram Settings
-                    </a>
-                    <a href="{{ url_for('run_now') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-play-fill me-1"></i> Run Check Now
-                    </a>
-                </div>
-                {% else %}
-                <div class="alert alert-warning" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                    The application is not fully configured yet. Please set up Telegram settings and add at least one calendar.
-                </div>
-                <div class="d-flex gap-2 mb-4">
-                    <a href="{{ url_for('settings') }}" class="btn btn-primary">
-                        <i class="bi bi-telegram me-1"></i> Configure Telegram
-                    </a>
-                    <a href="{{ url_for('new_user_calendar') }}" class="btn btn-outline-primary">
-                        <i class="bi bi-calendar-plus me-1"></i> Add Calendar
-                    </a>
-                </div>
-                {% endif %}
-                
-                {% if credential_status and user_calendars %}
-                    <div class="alert alert-warning" role="alert">
-                        <h4><i class="bi bi-exclamation-triangle-fill me-2"></i>Authentication Incomplete</h4>
-                        <p>The following calendars have client configuration but haven't completed the Google authentication process:</p>
-                        <ul>
-                            {% for calendar in user_calendars %}
-                                {% if credential_status[calendar.id] == 'client_config' %}
-                                <li>
-                                    <strong>{{ calendar.email }}</strong> - 
-                                    <a href="{{ url_for('google_auth', user_id=calendar.id, client_config=calendar.google_credentials) }}" class="btn btn-sm btn-warning">
-                                        <i class="bi bi-google"></i> Complete Authentication
-                                    </a>
-                                </li>
-                                {% endif %}
-                            {% endfor %}
-                        </ul>
-                        <p class="mb-0">Click the buttons above to complete Google OAuth authentication for each calendar.</p>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="mb-0"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
                     </div>
-                {% endif %}
-                
-                <!-- Calendars list -->
-                <h3 class="mt-4 mb-3"><i class="bi bi-calendar3 me-2"></i>Monitored Calendars</h3>
-                
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Email</th>
-                                <th>Calendar</th>
-                                <th>Telegram Topic</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% if user_calendars and user_calendars|length > 0 %}
-                                {% for calendar in user_calendars %}
-                                <tr>
-                                    <td>{{ calendar.email }}</td>
-                                    <td>
-                                        {% if calendar.calendar_id == 'primary' %}
-                                            Primary
-                                        {% elif calendar.calendar_id == 'all' %}
-                                            All calendars
+                    <div class="card-body">
+                        {% if is_configured %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle me-2"></i>
+                                <strong>System is configured and running!</strong>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Configuration needed:</strong> Please complete the setup below.
+                            </div>
+                        {% endif %}
+
+                        <div class="row mt-4">
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="bi bi-google me-2"></i>Google Calendar
+                                        </h5>
+                                        {% if google_connected %}
+                                            <p class="text-success">
+                                                <i class="bi bi-check-circle-fill me-2"></i>Connected
+                                            </p>
+                                            <p class="mb-0"><strong>Account:</strong> {{ google_email }}</p>
                                         {% else %}
-                                            {{ calendar.calendar_id }}
+                                            <p class="text-danger">
+                                                <i class="bi bi-x-circle-fill me-2"></i>Not connected
+                                            </p>
+                                            <p class="mb-0">Please add the Google Calendar connector in Replit tools.</p>
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if calendar.topic_name %}
-                                            <span class="badge bg-info">{{ calendar.topic_name }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <i class="bi bi-telegram me-2"></i>Telegram Bot
+                                        </h5>
+                                        {% if settings and settings.telegram_bot_token %}
+                                            <p class="text-success">
+                                                <i class="bi bi-check-circle-fill me-2"></i>Configured
+                                            </p>
+                                            <p class="mb-0"><strong>Chat ID:</strong> {{ settings.chat_id }}</p>
                                         {% else %}
-                                            <span class="text-muted">No topic</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if calendar.is_active %}
-                                            <span class="badge bg-success">Active</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">Inactive</span>
-                                        {% endif %}
-                                        
-                                        {% if credential_status and calendar.id in credential_status %}
-                                            {% if credential_status[calendar.id] == 'valid' %}
-                                                <span class="badge bg-success">Authenticated</span>
-                                            {% elif credential_status[calendar.id] == 'client_config' %}
-                                                <span class="badge bg-warning">Authentication Incomplete</span>
-                                            {% elif credential_status[calendar.id] == 'missing' %}
-                                                <span class="badge bg-danger">No Credentials</span>
-                                            {% elif credential_status[calendar.id] == 'invalid' %}
-                                                <span class="badge bg-danger">Invalid Credentials</span>
-                                            {% endif %}
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="d-flex gap-1">
-                                            <a href="{{ url_for('edit_user_calendar', user_id=calendar.id) }}" class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-pencil"></i> Edit
+                                            <p class="text-danger">
+                                                <i class="bi bi-x-circle-fill me-2"></i>Not configured
+                                            </p>
+                                            <a href="{{ url_for('settings') }}" class="btn btn-primary btn-sm">
+                                                Configure Now
                                             </a>
-                                            
-                                            {% if credential_status and calendar.id in credential_status %}
-                                                {% if credential_status[calendar.id] == 'client_config' %}
-                                                    <a href="{{ url_for('google_auth', user_id=calendar.id, client_config=calendar.google_credentials) }}" class="btn btn-sm btn-warning">
-                                                        <i class="bi bi-google"></i> Complete Auth
-                                                    </a>
-                                                {% endif %}
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            {% else %}
-                                <tr>
-                                    <td colspan="5" class="text-center py-3">
-                                        <p class="mb-2 text-muted">No calendars configured yet</p>
-                                        <a href="{{ url_for('new_user_calendar') }}" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-plus-circle me-1"></i> Add Your First Calendar
-                                        </a>
-                                    </td>
-                                </tr>
-                            {% endif %}
-                        </tbody>
-                    </table>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if is_configured %}
+                            <div class="mt-4">
+                                <h5>Quick Actions</h5>
+                                <a href="{{ url_for('run_now') }}" class="btn btn-primary">
+                                    <i class="bi bi-play-fill me-2"></i>Check Calendar Now
+                                </a>
+                                <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
+                                    <i class="bi bi-gear me-2"></i>Settings
+                                </a>
+                            </div>
+                        {% endif %}
+                    </div>
                 </div>
-                
-                <div class="mt-3">
-                    <a href="{{ url_for('new_user_calendar') }}" class="btn btn-success">
-                        <i class="bi bi-plus-lg me-1"></i> Add New Calendar
-                    </a>
+
+                {% if settings %}
+                <div class="card">
+                    <div class="card-header bg-info-subtle">
+                        <h3 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>System Status</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Check Interval:</strong> {{ settings.check_interval }} minutes</p>
+                        <p><strong>Last Check:</strong> {{ settings.last_check.strftime('%Y-%m-%d %H:%M:%S') if settings.last_check else 'Never' }}</p>
+                        <p class="mb-0"><strong>Supergroup Mode:</strong> {{ 'Enabled' if settings.is_supergroup else 'Disabled' }}</p>
+                    </div>
                 </div>
+                {% endif %}
             </div>
         </div>
-
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="h-100 p-4 bg-body-tertiary border rounded-3">
-                    <h3><i class="bi bi-people me-2"></i> Multiple Users</h3>
-                    <p>
-                        The application now supports monitoring calendars for multiple users:
-                    </p>
-                    <ul>
-                        <li>Monitor several employees' calendars</li>
-                        <li>Track changes made by external users to shared calendars</li>
-                        <li>Organize notifications by user in Telegram supergroup topics</li>
-                    </ul>
-                    <p>
-                        Each calendar requires its own Google API credentials.
-                    </p>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="h-100 p-4 bg-body-tertiary border rounded-3">
-                    <h3><i class="bi bi-telegram me-2"></i> Telegram Supergroups</h3>
-                    <p>
-                        For multiple users, you can use Telegram supergroups with topics:
-                    </p>
-                    <ol>
-                        <li>Create a Telegram supergroup and enable topics feature</li>
-                        <li>Create separate topics for each user (e.g., by user initials)</li>
-                        <li>Add your bot as an administrator of the supergroup</li>
-                        <li>Each user's calendar changes will post to their dedicated topic</li>
-                    </ol>
-                    <a href="{{ url_for('settings') }}" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-gear me-1"></i> Configure Telegram Settings
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <footer class="pt-3 mt-4 text-muted border-top">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    &copy; 2025 Google Calendar Telegram Notifier
-                </div>
-                <div>
-                    <a href="{{ url_for('settings') }}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-gear me-1"></i> Settings
-                    </a>
-                </div>
-            </div>
-        </footer>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
