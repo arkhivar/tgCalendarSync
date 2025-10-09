@@ -93,17 +93,17 @@
                             </div>
                         </div>
 
-                        {% if is_configured %}
-                            <div class="mt-4">
-                                <h5>Quick Actions</h5>
+                        <div class="mt-4">
+                            <h5>Quick Actions</h5>
+                            {% if is_configured %}
                                 <a href="{{ url_for('run_now') }}" class="btn btn-primary">
                                     <i class="bi bi-play-fill me-2"></i>Check Calendar Now
                                 </a>
-                                <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
-                                    <i class="bi bi-gear me-2"></i>Settings
-                                </a>
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                            <a href="{{ url_for('settings') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-gear me-2"></i>Settings
+                            </a>
+                        </div>
                     </div>
                 </div>
 
