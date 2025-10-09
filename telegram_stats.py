@@ -4,7 +4,7 @@ Telegram bot statistics and command handling module
 
 import logging
 from datetime import datetime, timedelta
-from models import EventRecord, UserCalendar, CalendarSettings
+from models import EventRecord, CalendarSettings
 from sqlalchemy import func, desc
 
 # Set up logging
@@ -39,24 +39,13 @@ def get_calendar_stats(days=30):
         
         # Process each event
         for event in events:
-            # Get the user calendar
-            user_calendar = UserCalendar.query.get(event.user_calendar_id)
-            if not user_calendar:
-                continue
-                
             # Track changes by calendar
-            calendar_id = user_calendar.calendar_id
+            calendar_id = event.calendar_id
             calendar_name = "Primary" if calendar_id == "primary" else calendar_id
             
             if calendar_name not in changes_by_calendar:
                 changes_by_calendar[calendar_name] = 0
             changes_by_calendar[calendar_name] += 1
-            
-            # Track changes by email
-            email = user_calendar.email
-            if email not in changes_by_email:
-                changes_by_email[email] = 0
-            changes_by_email[email] += 1
             
             # Track changes by day
             day = event.last_updated.strftime('%Y-%m-%d')
@@ -72,7 +61,6 @@ def get_calendar_stats(days=30):
         return {
             'total_events': total_events,
             'changes_by_calendar': changes_by_calendar,
-            'changes_by_email': changes_by_email,
             'most_active_day': most_active_day,
             'start_date': start_date,
             'end_date': end_date
@@ -87,7 +75,6 @@ def get_calendar_stats(days=30):
             'error': str(e),
             'total_events': 0,
             'changes_by_calendar': {},
-            'changes_by_email': {},
             'most_active_day': {},
             'start_date': start_date_default,
             'end_date': end_date_default
@@ -117,16 +104,6 @@ def format_stats_message(stats, days=30):
             message += f"{i+1}. {calendar}: {count} changes\n"
     else:
         message += "No calendar activity found\n"
-    
-    message += "\n"
-    
-    # Most active users
-    message += "*Most Active Users*:\n"
-    if stats['changes_by_email']:
-        for i, (email, count) in enumerate(list(stats['changes_by_email'].items())[:5]):
-            message += f"{i+1}. {email}: {count} changes\n"
-    else:
-        message += "No user activity found\n"
     
     message += "\n"
     
