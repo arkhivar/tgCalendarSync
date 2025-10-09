@@ -85,7 +85,7 @@ def scheduled_calendar_check():
                 return
             
             # Check if Google Calendar connector is configured
-            if not os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN'):
+            if not (os.environ.get('google_calendar_access_token') or os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')):
                 logger.error("Google Calendar connector not configured. Please set up the connector in Replit.")
                 return
                 
@@ -138,8 +138,9 @@ def index():
     settings = CalendarSettings.query.first()
     
     # Check if Google Calendar connector is configured
-    google_connected = bool(os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN'))
-    google_email = os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'Not configured')
+    # Replit connectors use REPLIT_DB_* prefix for integration credentials
+    google_connected = bool(os.environ.get('google_calendar_access_token') or os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN'))
+    google_email = os.environ.get('google_calendar_user_email') or os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'Not configured')
     
     is_configured = (settings is not None and 
                     settings.telegram_bot_token and 

@@ -20,10 +20,11 @@ def get_google_service():
     """
     try:
         # Get credentials from Replit connector environment variables
-        token = os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')
-        refresh_token = os.environ.get('GOOGLE_CALENDAR_REFRESH_TOKEN')
-        client_id = os.environ.get('GOOGLE_CALENDAR_CLIENT_ID')
-        client_secret = os.environ.get('GOOGLE_CALENDAR_CLIENT_SECRET')
+        # Replit connectors use lowercase variable names
+        token = os.environ.get('google_calendar_access_token') or os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')
+        refresh_token = os.environ.get('google_calendar_refresh_token') or os.environ.get('GOOGLE_CALENDAR_REFRESH_TOKEN')
+        client_id = os.environ.get('google_calendar_client_id') or os.environ.get('GOOGLE_CALENDAR_CLIENT_ID')
+        client_secret = os.environ.get('google_calendar_client_secret') or os.environ.get('GOOGLE_CALENDAR_CLIENT_SECRET')
         
         if not all([token, client_id, client_secret]):
             raise ValueError("Google Calendar connector credentials not found. Please ensure the connector is properly configured.")
@@ -148,7 +149,7 @@ def check_calendar_changes():
         current_time = datetime.utcnow()
         
         # Primary account email
-        primary_email = os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'speakenglishoffice@gmail.com')
+        primary_email = os.environ.get('google_calendar_user_email') or os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'speakenglishoffice@gmail.com')
         
         # Get all calendars
         calendars = get_user_calendars(service)
