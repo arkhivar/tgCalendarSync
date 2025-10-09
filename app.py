@@ -138,9 +138,18 @@ def index():
     settings = CalendarSettings.query.first()
     
     # Check if Google Calendar connector is configured
-    # Replit connectors use REPLIT_DB_* prefix for integration credentials
-    google_connected = bool(os.environ.get('google_calendar_access_token') or os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN'))
-    google_email = os.environ.get('google_calendar_user_email') or os.environ.get('GOOGLE_CALENDAR_USER_EMAIL', 'Not configured')
+    # Replit connectors typically use REPLIT_DB_GOOGLE_CALENDAR prefix
+    google_connected = bool(
+        os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_ACCESS_TOKEN') or 
+        os.environ.get('google_calendar_access_token') or 
+        os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN')
+    )
+    google_email = (
+        os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_USER_EMAIL') or
+        os.environ.get('google_calendar_user_email') or 
+        os.environ.get('GOOGLE_CALENDAR_USER_EMAIL') or
+        'Not configured'
+    )
     
     is_configured = (settings is not None and 
                     settings.telegram_bot_token and 
@@ -188,6 +197,16 @@ def settings():
         
         scheduler.add_job(scheduled_calendar_check, 'interval', minutes=check_interval)
         
+
+
+@app.route('/debug-env')
+def debug_env():
+    """Debug route to check Google Calendar connector environment variables"""
+    google_vars = {k: ('***' if 'secret' in k.lower() or 'token' in k.lower() else v) 
+                   for k, v in os.environ.items() 
+                   if 'google' in k.lower() or 'calendar' in k.lower() or 'replit_db' in k.lower()}
+    return f"<pre>{json.dumps(google_vars, indent=2)}</pre>"
+
         flash('Settings updated successfully!', 'success')
         return redirect(url_for('index'))
     
