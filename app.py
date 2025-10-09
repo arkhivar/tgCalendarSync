@@ -59,7 +59,7 @@ def handle_db_migration():
         if inspector.has_table("user_calendar"):
             logger.info("Removing old user_calendar table")
             conn = db.engine.connect()
-            conn.execute(sa.text("DROP TABLE IF EXISTS user_calendar"))
+            conn.execute(sa.text("DROP TABLE IF EXISTS user_calendar CASCADE"))
             conn.commit()
         
         # Import models after initializing app
