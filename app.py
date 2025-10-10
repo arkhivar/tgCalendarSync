@@ -345,6 +345,11 @@ def google_calendar_webhook():
     """
     Webhook endpoint for Google Calendar push notifications
     """
+    import sys
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+    logger.addHandler(console_handler)
+    
     try:
         # Google sends notifications with specific headers
         channel_id = request.headers.get('X-Goog-Channel-ID')
@@ -352,6 +357,16 @@ def google_calendar_webhook():
         resource_id = request.headers.get('X-Goog-Resource-ID')
         
         # Log ALL headers for debugging
+        print("=" * 50)
+        print(f"WEBHOOK RECEIVED - Google Calendar notification")
+        print(f"Channel ID: {channel_id}")
+        print(f"Resource State: {resource_state}")
+        print(f"Resource ID: {resource_id}")
+        print(f"All headers: {dict(request.headers)}")
+        print(f"Request method: {request.method}")
+        print(f"Request path: {request.path}")
+        print("=" * 50)
+        
         logger.info("=" * 50)
         logger.info(f"WEBHOOK RECEIVED - Google Calendar notification")
         logger.info(f"Channel ID: {channel_id}")
@@ -364,11 +379,13 @@ def google_calendar_webhook():
         # Process the actual change in the background
         if resource_state == 'sync':
             # This is just a verification sync, acknowledge it
+            print("Received SYNC notification from Google Calendar (initial setup)")
             logger.info("Received SYNC notification from Google Calendar (initial setup)")
             return "OK", 200
         
         if resource_state == 'exists':
             # Calendar has changes, trigger a check
+            print("⚡ CALENDAR CHANGE DETECTED via webhook! Triggering immediate check...")
             logger.info("⚡ CALENDAR CHANGE DETECTED via webhook! Triggering immediate check...")
             
             # Run calendar check in background to avoid blocking webhook response
@@ -376,14 +393,19 @@ def google_calendar_webhook():
             thread = threading.Thread(target=scheduled_calendar_check)
             thread.daemon = True
             thread.start()
+            print("✅ Background thread started for calendar check")
+            logger.info("✅ Background thread started for calendar check")
         else:
+            print(f"Unknown resource state: {resource_state}")
             logger.warning(f"Unknown resource state: {resource_state}")
         
         return "OK", 200
         
     except Exception as e:
+        print(f"ERROR in webhook: {str(e)}")
         logger.error(f"Error processing Google Calendar webhook: {str(e)}")
         import traceback
+        traceback.print_exc()
         logger.error(traceback.format_exc())
         return "OK", 200  # Still return 200 to Google to avoid retries
 

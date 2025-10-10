@@ -35,9 +35,13 @@ def create_watch_channel(service, calendar_id='primary'):
         
         # Get the webhook URL - must be HTTPS in production
         # Replit provides HTTPS by default
-        repl_slug = os.environ.get('REPL_SLUG', 'calendar-monitor')
-        repl_owner = os.environ.get('REPL_OWNER', 'user')
+        repl_slug = os.environ.get('REPL_SLUG', 'workspace')
+        repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
         webhook_url = f"https://{repl_slug}.{repl_owner}.repl.co/webhook/google-calendar"
+        
+        # Log the exact URL being used
+        logger.info(f"📍 Using webhook URL: {webhook_url}")
+        print(f"📍 Using webhook URL: {webhook_url}")
         
         # Set expiration (max 1 week for calendar API)
         expiration = int((datetime.utcnow() + timedelta(days=7)).timestamp() * 1000)
