@@ -2,10 +2,12 @@ import os
 import logging
 import json
 from datetime import datetime, timedelta
-from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials as GoogleCredentials
 from models import EventRecord, CalendarSettings
 from app import db
+from google_connector import get_access_token, get_user_email
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -15,37 +17,16 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
 def get_google_service():
     """
-    Create and return a Google Calendar API service using Replit connector credentials
+    Create and return a Google Calendar API service using Replit connector
     """
     try:
-        # Get credentials from Replit connector environment variables
-        # Try REPLIT_DB_ prefix first (standard for Replit connectors), then fallback to others
-        token = (os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_ACCESS_TOKEN') or 
-                os.environ.get('google_calendar_access_token') or 
-                os.environ.get('GOOGLE_CALENDAR_ACCESS_TOKEN'))
-        refresh_token = (os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_REFRESH_TOKEN') or 
-                        os.environ.get('google_calendar_refresh_token') or 
-                        os.environ.get('GOOGLE_CALENDAR_REFRESH_TOKEN'))
-        client_id = (os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_CLIENT_ID') or 
-                    os.environ.get('google_calendar_client_id') or 
-                    os.environ.get('GOOGLE_CALENDAR_CLIENT_ID'))
-        client_secret = (os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_CLIENT_SECRET') or 
-                        os.environ.get('google_calendar_client_secret') or 
-                        os.environ.get('GOOGLE_CALENDAR_CLIENT_SECRET'))
-
-        if not all([token, client_id, client_secret]):
-            raise ValueError("Google Calendar connector credentials not found. Please ensure the connector is properly configured and linked to this Repl.")
-
-        # Create credentials object
-        credentials = Credentials(
-            token=token,
-            refresh_token=refresh_token,
-            token_uri='https://oauth2.googleapis.com/token',
-            client_id=client_id,
-            client_secret=client_secret,
-            scopes=SCOPES
-        )
-
+        # Get access token from the Replit connector
+        access_token = get_access_token()
+        
+        # Create credentials object with just the access token
+        # The connector handles refresh automatically
+        credentials = GoogleCredentials(token=access_token)
+        
         # Build the service
         service = build('calendar', 'v3', credentials=credentials)
         return service
@@ -155,11 +136,8 @@ def check_calendar_changes():
         # Current time
         current_time = datetime.utcnow()
 
-        # Primary account email
-        primary_email = (os.environ.get('REPLIT_DB_GOOGLE_CALENDAR_USER_EMAIL') or 
-                        os.environ.get('google_calendar_user_email') or 
-                        os.environ.get('GOOGLE_CALENDAR_USER_EMAIL') or 
-                        'speakenglishoffice@gmail.com')
+        # Primary account email from connector
+        primary_email = get_user_email()
 
         # Get all calendars
         calendars = get_user_calendars(service)
