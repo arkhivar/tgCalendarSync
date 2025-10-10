@@ -282,6 +282,27 @@ def debug_webhooks():
         flash(f'Error setting up webhooks: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
+@app.route('/test-calendar-check')
+def test_calendar_check():
+    """Manually trigger a calendar check to test the notification pipeline"""
+    try:
+        print("=" * 50)
+        print("🧪 MANUAL CALENDAR CHECK TRIGGERED")
+        print(f"Time: {datetime.utcnow()}")
+        print("=" * 50)
+        
+        # Run the calendar check in the same way the webhook would
+        import threading
+        thread = threading.Thread(target=scheduled_calendar_check)
+        thread.daemon = True
+        thread.start()
+        
+        flash('Manual calendar check triggered! Check console for output and Telegram for messages.', 'info')
+    except Exception as e:
+        logger.error(f"Error in manual calendar check: {str(e)}")
+        flash(f'Error: {str(e)}', 'danger')
+    return redirect(url_for('index'))
+
 @app.route('/webhook/telegram', methods=['POST'])
 def telegram_webhook():
     """
@@ -340,7 +361,7 @@ def telegram_webhook():
         logger.error(traceback.format_exc())
         return "Internal Server Error", 500
 
-@app.route('/webhook/google-calendar', methods=['POST'])
+@app.route('/webhook/google-calendar', methods=['GET', 'POST'])
 def google_calendar_webhook():
     """
     Webhook endpoint for Google Calendar push notifications
@@ -350,6 +371,20 @@ def google_calendar_webhook():
     console_handler.setLevel(logging.INFO)
     logger.addHandler(console_handler)
     
+    # Handle GET requests (for testing accessibility)
+    if request.method == 'GET':
+        print("=" * 50)
+        print(f"🧪 WEBHOOK GET REQUEST - Testing accessibility")
+        print(f"URL: {request.url}")
+        print(f"Time: {datetime.utcnow()}")
+        print("=" * 50)
+        return {
+            'status': 'ok',
+            'message': 'Google Calendar webhook endpoint is accessible',
+            'url': request.url,
+            'timestamp': datetime.utcnow().isoformat()
+        }, 200
+    
     try:
         # Google sends notifications with specific headers
         channel_id = request.headers.get('X-Goog-Channel-ID')
@@ -358,13 +393,15 @@ def google_calendar_webhook():
         
         # Log ALL headers for debugging
         print("=" * 50)
-        print(f"WEBHOOK RECEIVED - Google Calendar notification")
+        print(f"🔔 WEBHOOK POST RECEIVED - Google Calendar notification")
+        print(f"Time: {datetime.utcnow()}")
         print(f"Channel ID: {channel_id}")
         print(f"Resource State: {resource_state}")
         print(f"Resource ID: {resource_id}")
         print(f"All headers: {dict(request.headers)}")
         print(f"Request method: {request.method}")
         print(f"Request path: {request.path}")
+        print(f"Request body: {request.get_data(as_text=True)}")
         print("=" * 50)
         
         logger.info("=" * 50)
