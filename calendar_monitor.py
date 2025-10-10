@@ -244,76 +244,76 @@ def check_calendar_changes():
                     # Event was updated
                     changes_desc = []
 
-                if existing_event.summary != summary:
-                    changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
-                    existing_event.summary = summary
+                    if existing_event.summary != summary:
+                        changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
+                        existing_event.summary = summary
 
-                # Handle datetime comparison
-                start_time_changed = False
-                if existing_event.start_time and start_time:
-                    existing_time_str = existing_event.start_time.strftime('%Y-%m-%d %H:%M')
-                    new_time_str = start_time.strftime('%Y-%m-%d %H:%M')
-                    start_time_changed = existing_time_str != new_time_str
-                else:
-                    start_time_changed = existing_event.start_time != start_time
+                    # Handle datetime comparison
+                    start_time_changed = False
+                    if existing_event.start_time and start_time:
+                        existing_time_str = existing_event.start_time.strftime('%Y-%m-%d %H:%M')
+                        new_time_str = start_time.strftime('%Y-%m-%d %H:%M')
+                        start_time_changed = existing_time_str != new_time_str
+                    else:
+                        start_time_changed = existing_event.start_time != start_time
 
-                if start_time_changed:
-                    old_time = existing_event.start_time.strftime('%Y-%m-%d %H:%M') if existing_event.start_time else 'Unknown'
-                    new_time = start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'
-                    changes_desc.append(f"Start time changed from {old_time} to {new_time}")
-                    existing_event.start_time = start_time
+                    if start_time_changed:
+                        old_time = existing_event.start_time.strftime('%Y-%m-%d %H:%M') if existing_event.start_time else 'Unknown'
+                        new_time = start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'
+                        changes_desc.append(f"Start time changed from {old_time} to {new_time}")
+                        existing_event.start_time = start_time
 
-                # Handle end time comparison
-                end_time_changed = False
-                if existing_event.end_time and end_time:
-                    existing_end_str = existing_event.end_time.strftime('%Y-%m-%d %H:%M')
-                    new_end_str = end_time.strftime('%Y-%m-%d %H:%M')
-                    end_time_changed = existing_end_str != new_end_str
-                else:
-                    end_time_changed = existing_event.end_time != end_time
+                    # Handle end time comparison
+                    end_time_changed = False
+                    if existing_event.end_time and end_time:
+                        existing_end_str = existing_event.end_time.strftime('%Y-%m-%d %H:%M')
+                        new_end_str = end_time.strftime('%Y-%m-%d %H:%M')
+                        end_time_changed = existing_end_str != new_end_str
+                    else:
+                        end_time_changed = existing_event.end_time != end_time
 
-                if end_time_changed:
-                    old_time = existing_event.end_time.strftime('%Y-%m-%d %H:%M') if existing_event.end_time else 'Unknown'
-                    new_time = end_time.strftime('%Y-%m-%d %H:%M') if end_time else 'Unknown'
-                    changes_desc.append(f"End time changed from {old_time} to {new_time}")
-                    existing_event.end_time = end_time
+                    if end_time_changed:
+                        old_time = existing_event.end_time.strftime('%Y-%m-%d %H:%M') if existing_event.end_time else 'Unknown'
+                        new_time = end_time.strftime('%Y-%m-%d %H:%M') if end_time else 'Unknown'
+                        changes_desc.append(f"End time changed from {old_time} to {new_time}")
+                        existing_event.end_time = end_time
 
-                if existing_event.location != location:
-                    changes_desc.append(f"Location changed from '{existing_event.location}' to '{location}'")
-                    existing_event.location = location
+                    if existing_event.location != location:
+                        changes_desc.append(f"Location changed from '{existing_event.location}' to '{location}'")
+                        existing_event.location = location
 
-                if existing_event.description != description:
-                    existing_event.description = description
-                    changes_desc.append("Description was updated")
+                    if existing_event.description != description:
+                        existing_event.description = description
+                        changes_desc.append("Description was updated")
 
-                if existing_event.status != status:
-                    changes_desc.append(f"Status changed from '{existing_event.status}' to '{status}'")
-                    existing_event.status = status
+                    if existing_event.status != status:
+                        changes_desc.append(f"Status changed from '{existing_event.status}' to '{status}'")
+                        existing_event.status = status
 
-                existing_event.last_updated = updated_time
+                    existing_event.last_updated = updated_time
 
-                # Only create a notification if there were actual changes
-                if changes_desc:
-                    message = f"🔄 Event updated: {summary}\n"
-                    message += f"📅 Date: {start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'}\n"
+                    # Only create a notification if there were actual changes
+                    if changes_desc:
+                        message = f"🔄 Event updated: {summary}\n"
+                        message += f"📅 Date: {start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'}\n"
 
-                    if 'calendarName' in event:
-                        message += f"📆 Calendar: {event['calendarName']}\n"
+                        if 'calendarName' in event:
+                            message += f"📆 Calendar: {event['calendarName']}\n"
 
-                    message += "Changes:\n"
+                        message += "Changes:\n"
 
-                    for change in changes_desc:
-                        message += f"- {change}\n"
+                        for change in changes_desc:
+                            message += f"- {change}\n"
 
-                    if creator_info:
-                        message += creator_info
+                        if creator_info:
+                            message += creator_info
 
-                    changes.append({
-                        'type': 'updated',
-                        'event': existing_event,
-                        'message': message,
-                        'calendar_name': event.get('calendarName', source_calendar_id)
-                    })
+                        changes.append({
+                            'type': 'updated',
+                            'event': existing_event,
+                            'message': message,
+                            'calendar_name': event.get('calendarName', source_calendar_id)
+                        })
 
         # Check for deleted events
         db_event_ids = {(event.event_id, event.calendar_id) for event in EventRecord.query.all()}
