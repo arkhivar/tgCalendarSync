@@ -157,6 +157,12 @@ def check_calendar_changes():
 
         logger.info(f"Retrieved {len(all_events)} events from all calendars")
 
+        # Build a dictionary of existing events for faster lookup
+        existing_events_dict = {}
+        for existing_event in EventRecord.query.all():
+            key = (existing_event.event_id, existing_event.calendar_id)
+            existing_events_dict[key] = existing_event
+
         # Process each event
         for event in all_events:
             event_id = event.get('id')
@@ -190,11 +196,9 @@ def check_calendar_changes():
             if creator_email and creator_email.lower() != primary_email.lower():
                 creator_info = f"\n👤 Modified by: {creator_name or creator_email}\n"
 
-            # Check if this event exists in our database
-            existing_event = EventRecord.query.filter_by(
-                event_id=event_id,
-                calendar_id=source_calendar_id
-            ).first()
+            # Check if this event exists in our database using the dictionary
+            key = (event_id, source_calendar_id)
+            existing_event = existing_events_dict.get(key)
 
             if not existing_event:
                 # New event
@@ -315,34 +319,28 @@ def check_calendar_changes():
                             'calendar_name': event.get('calendarName', source_calendar_id)
                         })
 
-        # Clean up old past events from database (older than 7 days)
+        # Clean up old past events from database (older than 7 days) - bulk delete
         old_cutoff = current_time - timedelta(days=7)
-        old_events = EventRecord.query.filter(
+        old_events_count = EventRecord.query.filter(
             EventRecord.end_time < old_cutoff.replace(tzinfo=None)
-        ).all()
+        ).delete()
         
-        for old_event in old_events:
-            logger.debug(f"Removing old event from database: {old_event.summary}")
-            db.session.delete(old_event)
+        if old_events_count > 0:
+            logger.info(f"Removed {old_events_count} old events from database")
         
         # Check for deleted events (only among current/future events)
-        current_db_events = EventRecord.query.filter(
-            EventRecord.end_time >= current_time.replace(tzinfo=None)
-        ).all()
-        db_event_ids = {(event.event_id, event.calendar_id) for event in current_db_events}
+        db_event_ids = {(event.event_id, event.calendar_id) for event in existing_events_dict.values() 
+                        if event.end_time and event.end_time >= current_time.replace(tzinfo=None)}
         api_event_ids = {(event.get('id'), event.get('sourceCalendarId')) for event in all_events}
 
         deleted_event_ids = db_event_ids - api_event_ids
 
         for event_id, cal_id in deleted_event_ids:
-            deleted_event = EventRecord.query.filter_by(
-                event_id=event_id,
-                calendar_id=cal_id
-            ).first()
+            deleted_event = existing_events_dict.get((event_id, cal_id))
 
             if deleted_event:
                 # Only notify about deletions of future events
-                if deleted_event.end_time and deleted_event.end_time > current_time:
+                if deleted_event.end_time and deleted_event.end_time > current_time.replace(tzinfo=None):
                     message = f"❌ Event deleted: {deleted_event.summary}\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
 

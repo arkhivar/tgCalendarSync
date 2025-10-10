@@ -241,8 +241,12 @@ def settings():
 
 @app.route('/run-now')
 def run_now():
-    scheduled_calendar_check()
-    flash('Calendar check executed!', 'success')
+    try:
+        scheduled_calendar_check()
+        flash('Calendar check executed!', 'success')
+    except Exception as e:
+        logger.error(f"Error during manual calendar check: {str(e)}")
+        flash(f'Error during calendar check: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/webhook/telegram', methods=['POST'])
