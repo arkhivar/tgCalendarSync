@@ -203,15 +203,20 @@ def check_calendar_changes():
             if not existing_event:
                 # New event
                 # Make sure all datetimes are stored as naive UTC for consistency
+                # Ensure all times are stored as naive UTC
+                start_time_naive = start_time.replace(tzinfo=None) if start_time else None
+                end_time_naive = end_time.replace(tzinfo=None) if end_time else None
+                updated_time_naive = updated_time.replace(tzinfo=None) if updated_time else None
+                
                 new_event = EventRecord(
                     event_id=event_id,
                     calendar_id=source_calendar_id,
                     summary=summary,
                     description=description,
                     location=location,
-                    start_time=start_time.replace(tzinfo=None) if start_time and start_time.tzinfo else start_time,
-                    end_time=end_time.replace(tzinfo=None) if end_time and end_time.tzinfo else end_time,
-                    last_updated=updated_time.replace(tzinfo=None) if updated_time and updated_time.tzinfo else updated_time,
+                    start_time=start_time_naive,
+                    end_time=end_time_naive,
+                    last_updated=updated_time_naive,
                     status=status
                 )
 
@@ -265,7 +270,7 @@ def check_calendar_changes():
                         old_time = existing_event.start_time.strftime('%Y-%m-%d %H:%M') if existing_event.start_time else 'Unknown'
                         new_time = start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'
                         changes_desc.append(f"Start time changed from {old_time} to {new_time}")
-                        existing_event.start_time = start_time
+                        existing_event.start_time = start_time.replace(tzinfo=None) if start_time else None
 
                     # Handle end time comparison
                     end_time_changed = False
@@ -280,7 +285,7 @@ def check_calendar_changes():
                         old_time = existing_event.end_time.strftime('%Y-%m-%d %H:%M') if existing_event.end_time else 'Unknown'
                         new_time = end_time.strftime('%Y-%m-%d %H:%M') if end_time else 'Unknown'
                         changes_desc.append(f"End time changed from {old_time} to {new_time}")
-                        existing_event.end_time = end_time
+                        existing_event.end_time = end_time.replace(tzinfo=None) if end_time else None
 
                     if existing_event.location != location:
                         changes_desc.append(f"Location changed from '{existing_event.location}' to '{location}'")
@@ -320,9 +325,9 @@ def check_calendar_changes():
                         })
 
         # Clean up old past events from database (older than 7 days) - bulk delete
-        old_cutoff = current_time - timedelta(days=7)
+        old_cutoff = (current_time - timedelta(days=7)).replace(tzinfo=None)
         old_events_count = EventRecord.query.filter(
-            EventRecord.end_time < old_cutoff.replace(tzinfo=None)
+            EventRecord.end_time < old_cutoff
         ).delete()
         
         if old_events_count > 0:
@@ -340,7 +345,8 @@ def check_calendar_changes():
 
             if deleted_event:
                 # Only notify about deletions of future events
-                if deleted_event.end_time and deleted_event.end_time > current_time.replace(tzinfo=None):
+                current_time_naive = current_time.replace(tzinfo=None)
+                if deleted_event.end_time and deleted_event.end_time > current_time_naive:
                     message = f"❌ Event deleted: {deleted_event.summary}\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
 
