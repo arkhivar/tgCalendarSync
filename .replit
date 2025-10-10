@@ -33,9 +33,5 @@ waitForPort = 5000
 localPort = 5000
 externalPort = 80
 
-[[ports]]
-localPort = 36959
-externalPort = 3000
-
 [agent]
 integrations = ["google-calendar:1.0.0"]
