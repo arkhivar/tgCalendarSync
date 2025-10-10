@@ -78,6 +78,16 @@ def handle_db_migration():
                 conn.commit()
                 conn.close()
         
+        # Check if calendar_name column exists in event_record
+        if inspector.has_table("event_record"):
+            columns = [col['name'] for col in inspector.get_columns("event_record")]
+            if 'calendar_name' not in columns:
+                logger.info("Adding calendar_name column to event_record table")
+                conn = db.engine.connect()
+                conn.execute(sa.text("ALTER TABLE event_record ADD COLUMN calendar_name VARCHAR(200)"))
+                conn.commit()
+                conn.close()
+        
         logger.info("Database schema ready")
 
 # Import here after initializing app to avoid circular imports

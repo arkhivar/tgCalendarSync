@@ -21,6 +21,7 @@ class EventRecord(db.Model):
     end_time = db.Column(db.DateTime)
     last_updated = db.Column(db.DateTime)
     status = db.Column(db.String(50))
+    calendar_name = db.Column(db.String(200))  # Store the display name of the calendar
 
     def __repr__(self):
         return f'<EventRecord {self.event_id}>'

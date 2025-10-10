@@ -217,7 +217,8 @@ def check_calendar_changes():
                     start_time=start_time_naive,
                     end_time=end_time_naive,
                     last_updated=updated_time_naive,
-                    status=status
+                    status=status,
+                    calendar_name=event.get('calendarName', source_calendar_id)
                 )
 
                 db.session.add(new_event)
@@ -354,11 +355,14 @@ def check_calendar_changes():
                     message = f"❌ Event deleted: {deleted_event.summary}\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
 
+                    # Use stored calendar_name if available, otherwise fall back to calendar_id
+                    calendar_display_name = deleted_event.calendar_name if hasattr(deleted_event, 'calendar_name') and deleted_event.calendar_name else cal_id
+
                     changes.append({
                         'type': 'deleted',
                         'event': deleted_event,
                         'message': message,
-                        'calendar_name': cal_id
+                        'calendar_name': calendar_display_name
                     })
 
                 # Remove the event from the database
