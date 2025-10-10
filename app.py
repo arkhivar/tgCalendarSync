@@ -140,8 +140,9 @@ def scheduled_calendar_check():
                         topic_id
                     )
                 
-            # Update the last check time
-            settings.last_check = datetime.utcnow()
+            # Update the last check time (naive UTC)
+            from datetime import timezone
+            settings.last_check = datetime.now(timezone.utc).replace(tzinfo=None)
             db.session.commit()
                         
         except Exception as e:

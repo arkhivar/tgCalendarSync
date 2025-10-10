@@ -133,8 +133,9 @@ def check_calendar_changes():
         # List to store changes
         changes = []
 
-        # Current time
-        current_time = datetime.utcnow()
+        # Current time (UTC aware)
+        from datetime import timezone
+        current_time = datetime.now(timezone.utc)
 
         # Primary account email from connector
         primary_email = get_user_email()
@@ -196,15 +197,16 @@ def check_calendar_changes():
 
             if not existing_event:
                 # New event
+                # Make sure all datetimes are stored as naive UTC for consistency
                 new_event = EventRecord(
                     event_id=event_id,
                     calendar_id=source_calendar_id,
                     summary=summary,
                     description=description,
                     location=location,
-                    start_time=start_time,
-                    end_time=end_time,
-                    last_updated=updated_time,
+                    start_time=start_time.replace(tzinfo=None) if start_time and start_time.tzinfo else start_time,
+                    end_time=end_time.replace(tzinfo=None) if end_time and end_time.tzinfo else end_time,
+                    last_updated=updated_time.replace(tzinfo=None) if updated_time and updated_time.tzinfo else updated_time,
                     status=status
                 )
 
@@ -233,14 +235,11 @@ def check_calendar_changes():
                 })
 
             elif updated_time and existing_event.last_updated:
-                # Make both datetimes timezone-aware for comparison
-                existing_updated = existing_event.last_updated
-                if existing_updated.tzinfo is None:
-                    # If stored datetime is naive, make it UTC-aware
-                    from datetime import timezone
-                    existing_updated = existing_updated.replace(tzinfo=timezone.utc)
+                # Make both datetimes naive UTC for comparison
+                updated_time_naive = updated_time.replace(tzinfo=None) if updated_time.tzinfo else updated_time
+                existing_updated_naive = existing_event.last_updated.replace(tzinfo=None) if existing_event.last_updated.tzinfo else existing_event.last_updated
                 
-                if updated_time > existing_updated:
+                if updated_time_naive > existing_updated_naive:
                     # Event was updated
                     changes_desc = []
 
@@ -290,7 +289,7 @@ def check_calendar_changes():
                         changes_desc.append(f"Status changed from '{existing_event.status}' to '{status}'")
                         existing_event.status = status
 
-                    existing_event.last_updated = updated_time
+                    existing_event.last_updated = updated_time.replace(tzinfo=None) if updated_time and updated_time.tzinfo else updated_time
 
                     # Only create a notification if there were actual changes
                     if changes_desc:
