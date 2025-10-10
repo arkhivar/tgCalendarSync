@@ -258,13 +258,21 @@ def run_now():
         flash(f'Error during calendar check: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
-@app.route('/setup-webhooks')
-def setup_webhooks():
-    """Manually set up Google Calendar webhooks"""
+@app.route('/debug-webhooks')
+def debug_webhooks():
+    """Debug route to check webhook status and manually trigger setup"""
     try:
-        from google_calendar_webhook import setup_all_calendar_watches
+        from google_calendar_webhook import setup_all_calendar_watches, active_channels
         setup_all_calendar_watches()
-        flash('Google Calendar webhooks set up successfully! You should now receive near-instant notifications.', 'success')
+        
+        # Show active channels
+        channels_info = []
+        for cal_id, channel in active_channels.items():
+            from datetime import datetime
+            expiry = datetime.fromtimestamp(channel['expiration'] / 1000)
+            channels_info.append(f"{cal_id[:30]}... expires {expiry}")
+        
+        flash(f'Webhooks configured for {len(active_channels)} calendars. ' + '; '.join(channels_info), 'success')
     except Exception as e:
         logger.error(f"Error setting up webhooks: {str(e)}")
         flash(f'Error setting up webhooks: {str(e)}', 'danger')
@@ -387,21 +395,22 @@ with app.app_context():
             # Add polling job as fallback (less frequent now since we have webhooks)
             scheduler.add_job(scheduled_calendar_check, 'interval', minutes=settings.check_interval)
             
-            # Add job to renew webhook channels daily
+            # Add job to renew webhook channels every 6 days (before 7-day expiration)
             from google_calendar_webhook import renew_expiring_channels
-            scheduler.add_job(renew_expiring_channels, 'interval', hours=24)
+            scheduler.add_job(renew_expiring_channels, 'interval', days=6)
             
             scheduler.start()
             logger.info(f"Scheduler started with interval of {settings.check_interval} minutes")
             
-            # Set up Google Calendar webhooks for push notifications
+            # Set up Google Calendar webhooks for push notifications automatically
             try:
                 from google_calendar_webhook import setup_all_calendar_watches
+                logger.info("Setting up Google Calendar webhooks automatically...")
                 setup_all_calendar_watches()
-                logger.info("Google Calendar push notifications configured")
+                logger.info("✅ Google Calendar push notifications configured successfully")
             except Exception as e:
-                logger.error(f"Failed to set up Google Calendar webhooks: {str(e)}")
-                logger.info("Falling back to polling mode")
+                logger.error(f"❌ Failed to set up Google Calendar webhooks: {str(e)}")
+                logger.info("Falling back to polling mode only")
             
             # Register the shutdown function
             atexit.register(lambda: scheduler.shutdown())

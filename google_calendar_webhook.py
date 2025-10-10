@@ -42,6 +42,9 @@ def create_watch_channel(service, calendar_id='primary'):
         # Set expiration (max 1 week for calendar API)
         expiration = int((datetime.utcnow() + timedelta(days=7)).timestamp() * 1000)
         
+        logger.info(f"🔔 Setting up webhook for {calendar_id[:40]}...")
+        logger.info(f"   Webhook URL: {webhook_url}")
+        
         # Create the watch request
         watch_request = {
             'id': channel_id,
@@ -56,7 +59,8 @@ def create_watch_channel(service, calendar_id='primary'):
             body=watch_request
         ).execute()
         
-        logger.info(f"Created watch channel {channel_id} for calendar {calendar_id}")
+        expiry_date = datetime.fromtimestamp(expiration / 1000)
+        logger.info(f"✅ Created watch channel for {calendar_id[:40]}... (expires {expiry_date})")
         
         # Store channel info
         active_channels[calendar_id] = {
@@ -68,7 +72,7 @@ def create_watch_channel(service, calendar_id='primary'):
         return channel
         
     except Exception as e:
-        logger.error(f"Error creating watch channel for calendar {calendar_id}: {str(e)}")
+        logger.error(f"❌ Error creating watch channel for calendar {calendar_id}: {str(e)}")
         raise
 
 def stop_watch_channel(service, channel_id, resource_id):
