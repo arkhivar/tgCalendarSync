@@ -188,12 +188,6 @@ def debug_env():
                    if 'google' in k.lower() or 'calendar' in k.lower() or 'replit_db' in k.lower()}
     return f"<pre>{json.dumps(google_vars, indent=2)}</pre>"
 
-@app.route('/settings', methods=['GET', 'POST'])
-def settings():
-    if request.method == 'POST':
-        telegram_bot_token = request.form.get('telegram_bot_token')
-
-
 @app.route('/webhook/test')
 def test_webhook():
     """Test endpoint to verify webhook URL is accessible"""
@@ -203,7 +197,10 @@ def test_webhook():
         'url': request.url
     }, 200
 
-
+@app.route('/settings', methods=['GET', 'POST'])
+def settings():
+    if request.method == 'POST':
+        telegram_bot_token = request.form.get('telegram_bot_token')
         chat_id = request.form.get('chat_id')
         is_supergroup = 'is_supergroup' in request.form
         check_interval = int(request.form.get('check_interval', 15))
