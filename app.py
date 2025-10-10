@@ -192,6 +192,18 @@ def debug_env():
 def settings():
     if request.method == 'POST':
         telegram_bot_token = request.form.get('telegram_bot_token')
+
+
+@app.route('/webhook/test')
+def test_webhook():
+    """Test endpoint to verify webhook URL is accessible"""
+    return {
+        'status': 'ok',
+        'message': 'Webhook endpoint is accessible',
+        'url': request.url
+    }, 200
+
+
         chat_id = request.form.get('chat_id')
         is_supergroup = 'is_supergroup' in request.form
         check_interval = int(request.form.get('check_interval', 15))
@@ -330,24 +342,33 @@ def google_calendar_webhook():
         resource_state = request.headers.get('X-Goog-Resource-State')
         resource_id = request.headers.get('X-Goog-Resource-ID')
         
-        logger.info(f"Google Calendar webhook: channel={channel_id}, state={resource_state}")
+        # Log ALL headers for debugging
+        logger.info("=" * 50)
+        logger.info(f"WEBHOOK RECEIVED - Google Calendar notification")
+        logger.info(f"Channel ID: {channel_id}")
+        logger.info(f"Resource State: {resource_state}")
+        logger.info(f"Resource ID: {resource_id}")
+        logger.info(f"All headers: {dict(request.headers)}")
+        logger.info("=" * 50)
         
         # Respond immediately to Google
         # Process the actual change in the background
         if resource_state == 'sync':
             # This is just a verification sync, acknowledge it
-            logger.info("Received sync notification from Google Calendar")
+            logger.info("Received SYNC notification from Google Calendar (initial setup)")
             return "OK", 200
         
         if resource_state == 'exists':
             # Calendar has changes, trigger a check
-            logger.info("Calendar change detected via webhook, triggering check")
+            logger.info("⚡ CALENDAR CHANGE DETECTED via webhook! Triggering immediate check...")
             
             # Run calendar check in background to avoid blocking webhook response
             import threading
             thread = threading.Thread(target=scheduled_calendar_check)
             thread.daemon = True
             thread.start()
+        else:
+            logger.warning(f"Unknown resource state: {resource_state}")
         
         return "OK", 200
         
