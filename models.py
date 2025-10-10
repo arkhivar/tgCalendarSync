@@ -3,11 +3,12 @@ from app import db
 
 class CalendarSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    telegram_bot_token = db.Column(db.String(100))
-    chat_id = db.Column(db.String(50))
+    telegram_bot_token = db.Column(db.String(255))
+    chat_id = db.Column(db.String(255))
     is_supergroup = db.Column(db.Boolean, default=False)
     check_interval = db.Column(db.Integer, default=15)  # In minutes
     last_check = db.Column(db.DateTime, default=datetime.utcnow)
+    topic_mappings = db.Column(db.Text)  # JSON string mapping calendar names to topic IDs
 
 class EventRecord(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -72,7 +72,7 @@ def handle_db_migration():
 # Import here after initializing app to avoid circular imports
 from models import CalendarSettings, EventRecord  
 from calendar_monitor import check_calendar_changes
-from telegram_notifier import send_telegram_message, create_topic_if_not_exists
+from telegram_notifier import send_telegram_message
 from telegram_stats import process_telegram_update
 
 # Create a function to check for calendar changes
@@ -98,23 +98,26 @@ def scheduled_calendar_check():
             changes = check_calendar_changes()
             
             if changes:
+                # Parse topic mappings if they exist
+                topic_mappings = {}
+                if settings.topic_mappings:
+                    try:
+                        topic_mappings = json.loads(settings.topic_mappings)
+                    except:
+                        logger.error("Failed to parse topic mappings")
+                
                 # Send notifications for each change
                 for change in changes:
                     message = change['message']
                     calendar_name = change.get('calendar_name', 'Unknown')
                     
-                    # If using a supergroup, create topics per calendar
-                    topic_name = None
-                    if settings.is_supergroup:
-                        # Use calendar name as topic
-                        topic_name = calendar_name if calendar_name != 'primary' else 'Main Calendar'
-                        
-                        # Make sure the topic exists
-                        create_topic_if_not_exists(
-                            settings.telegram_bot_token, 
-                            settings.chat_id, 
-                            topic_name
-                        )
+                    # If using a supergroup, get the topic ID from mappings
+                    topic_id = None
+                    if settings.is_supergroup and topic_mappings:
+                        from telegram_notifier import get_topic_id_from_mapping
+                        topic_id = get_topic_id_from_mapping(topic_mappings, calendar_name)
+                        if not topic_id:
+                            logger.warning(f"No topic mapping found for calendar '{calendar_name}', sending to General")
                     
                     logger.info(f"Calendar change detected: {message[:50]}...")
                     
@@ -123,7 +126,7 @@ def scheduled_calendar_check():
                         settings.telegram_bot_token,
                         settings.chat_id,
                         message,
-                        topic_name
+                        topic_id
                     )
                 
             # Update the last check time
@@ -180,6 +183,14 @@ def settings():
         chat_id = request.form.get('chat_id')
         is_supergroup = 'is_supergroup' in request.form
         check_interval = int(request.form.get('check_interval', 15))
+        topic_mappings = request.form.get('topic_mappings', '{}')
+        
+        # Validate topic mappings JSON
+        try:
+            json.loads(topic_mappings)
+        except:
+            flash('Invalid topic mappings JSON format', 'danger')
+            return redirect(url_for('settings'))
         
         settings = CalendarSettings.query.first()
         
@@ -189,6 +200,7 @@ def settings():
                 chat_id=chat_id,
                 is_supergroup=is_supergroup,
                 check_interval=check_interval,
+                topic_mappings=topic_mappings,
                 last_check=datetime.utcnow()
             )
             db.session.add(settings)
@@ -197,6 +209,7 @@ def settings():
             settings.chat_id = chat_id
             settings.is_supergroup = is_supergroup
             settings.check_interval = check_interval
+            settings.topic_mappings = topic_mappings
         
         db.session.commit()
         

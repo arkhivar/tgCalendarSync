@@ -71,6 +71,15 @@
                             </div>
                             
                             <div class="mb-3">
+                                <label for="topic_mappings" class="form-label">Topic Mappings (JSON)</label>
+                                <textarea class="form-control font-monospace" id="topic_mappings" name="topic_mappings" rows="6">{{ settings.topic_mappings if settings and settings.topic_mappings else '{}' }}</textarea>
+                                <div class="form-text">
+                                    Map calendar names to topic IDs in JSON format. Get topic IDs by forwarding messages from each topic to <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>.
+                                    <br>Example: <code>{"CL": 123456, "TR": 789012, "MP": 345678}</code>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label for="check_interval" class="form-label">Check Interval (minutes)</label>
                                 <input type="number" min="5" max="1440" class="form-control" id="check_interval" name="check_interval" value="{{ settings.check_interval if settings else 15 }}" required>
                                 <div class="form-text">
