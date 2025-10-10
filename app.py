@@ -249,6 +249,18 @@ def run_now():
         flash(f'Error during calendar check: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
+@app.route('/setup-webhooks')
+def setup_webhooks():
+    """Manually set up Google Calendar webhooks"""
+    try:
+        from google_calendar_webhook import setup_all_calendar_watches
+        setup_all_calendar_watches()
+        flash('Google Calendar webhooks set up successfully! You should now receive near-instant notifications.', 'success')
+    except Exception as e:
+        logger.error(f"Error setting up webhooks: {str(e)}")
+        flash(f'Error setting up webhooks: {str(e)}', 'danger')
+    return redirect(url_for('index'))
+
 @app.route('/webhook/telegram', methods=['POST'])
 def telegram_webhook():
     """
@@ -307,6 +319,44 @@ def telegram_webhook():
         logger.error(traceback.format_exc())
         return "Internal Server Error", 500
 
+@app.route('/webhook/google-calendar', methods=['POST'])
+def google_calendar_webhook():
+    """
+    Webhook endpoint for Google Calendar push notifications
+    """
+    try:
+        # Google sends notifications with specific headers
+        channel_id = request.headers.get('X-Goog-Channel-ID')
+        resource_state = request.headers.get('X-Goog-Resource-State')
+        resource_id = request.headers.get('X-Goog-Resource-ID')
+        
+        logger.info(f"Google Calendar webhook: channel={channel_id}, state={resource_state}")
+        
+        # Respond immediately to Google
+        # Process the actual change in the background
+        if resource_state == 'sync':
+            # This is just a verification sync, acknowledge it
+            logger.info("Received sync notification from Google Calendar")
+            return "OK", 200
+        
+        if resource_state == 'exists':
+            # Calendar has changes, trigger a check
+            logger.info("Calendar change detected via webhook, triggering check")
+            
+            # Run calendar check in background to avoid blocking webhook response
+            import threading
+            thread = threading.Thread(target=scheduled_calendar_check)
+            thread.daemon = True
+            thread.start()
+        
+        return "OK", 200
+        
+    except Exception as e:
+        logger.error(f"Error processing Google Calendar webhook: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return "OK", 200  # Still return 200 to Google to avoid retries
+
 # Initialize database tables and start scheduler
 with app.app_context():
     try:
@@ -316,9 +366,24 @@ with app.app_context():
         # Start the scheduler if settings exist
         settings = CalendarSettings.query.first()
         if settings and settings.check_interval:
+            # Add polling job as fallback (less frequent now since we have webhooks)
             scheduler.add_job(scheduled_calendar_check, 'interval', minutes=settings.check_interval)
+            
+            # Add job to renew webhook channels daily
+            from google_calendar_webhook import renew_expiring_channels
+            scheduler.add_job(renew_expiring_channels, 'interval', hours=24)
+            
             scheduler.start()
             logger.info(f"Scheduler started with interval of {settings.check_interval} minutes")
+            
+            # Set up Google Calendar webhooks for push notifications
+            try:
+                from google_calendar_webhook import setup_all_calendar_watches
+                setup_all_calendar_watches()
+                logger.info("Google Calendar push notifications configured")
+            except Exception as e:
+                logger.error(f"Failed to set up Google Calendar webhooks: {str(e)}")
+                logger.info("Falling back to polling mode")
             
             # Register the shutdown function
             atexit.register(lambda: scheduler.shutdown())
