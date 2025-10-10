@@ -244,12 +244,6 @@ def settings():
         
         db.session.commit()
         
-        # Reschedule the job with the new interval
-        if scheduler.get_jobs():
-            scheduler.remove_all_jobs()
-        
-        scheduler.add_job(scheduled_calendar_check, 'interval', minutes=check_interval)
-        
         flash('Settings updated successfully!', 'success')
         return redirect(url_for('index'))
     
@@ -401,16 +395,13 @@ with app.app_context():
         
         # Start the scheduler if settings exist
         settings = CalendarSettings.query.first()
-        if settings and settings.check_interval:
-            # Add polling job as fallback (less frequent now since we have webhooks)
-            scheduler.add_job(scheduled_calendar_check, 'interval', minutes=settings.check_interval)
-            
-            # Add job to renew webhook channels every 6 days (before 7-day expiration)
+        if settings:
+            # Only add job to renew webhook channels every 6 days (before 7-day expiration)
             from google_calendar_webhook import renew_expiring_channels
             scheduler.add_job(renew_expiring_channels, 'interval', days=6)
             
             scheduler.start()
-            logger.info(f"Scheduler started with interval of {settings.check_interval} minutes")
+            logger.info("Scheduler started for webhook renewal only")
             
             # Set up Google Calendar webhooks for push notifications automatically
             try:
@@ -420,7 +411,6 @@ with app.app_context():
                 logger.info("✅ Google Calendar push notifications configured successfully")
             except Exception as e:
                 logger.error(f"❌ Failed to set up Google Calendar webhooks: {str(e)}")
-                logger.info("Falling back to polling mode only")
             
             # Register the shutdown function
             atexit.register(lambda: scheduler.shutdown())
