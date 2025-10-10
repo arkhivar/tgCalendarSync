@@ -232,9 +232,17 @@ def check_calendar_changes():
                     'calendar_name': event.get('calendarName', source_calendar_id)
                 })
 
-            elif updated_time and existing_event.last_updated and updated_time > existing_event.last_updated:
-                # Event was updated
-                changes_desc = []
+            elif updated_time and existing_event.last_updated:
+                # Make both datetimes timezone-aware for comparison
+                existing_updated = existing_event.last_updated
+                if existing_updated.tzinfo is None:
+                    # If stored datetime is naive, make it UTC-aware
+                    from datetime import timezone
+                    existing_updated = existing_updated.replace(tzinfo=timezone.utc)
+                
+                if updated_time > existing_updated:
+                    # Event was updated
+                    changes_desc = []
 
                 if existing_event.summary != summary:
                     changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
