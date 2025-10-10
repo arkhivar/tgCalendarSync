@@ -55,8 +55,9 @@ def get_calendar_events(service, calendar_id='primary', time_min=None, time_max=
     """
     try:
         # Set default time range if not provided
+        # Only look at current and future events (from now onwards)
         if not time_min:
-            time_min = datetime.utcnow() - timedelta(days=7)
+            time_min = datetime.utcnow()
         if not time_max:
             time_max = datetime.utcnow() + timedelta(days=30)
 
@@ -314,8 +315,21 @@ def check_calendar_changes():
                             'calendar_name': event.get('calendarName', source_calendar_id)
                         })
 
-        # Check for deleted events
-        db_event_ids = {(event.event_id, event.calendar_id) for event in EventRecord.query.all()}
+        # Clean up old past events from database (older than 7 days)
+        old_cutoff = current_time - timedelta(days=7)
+        old_events = EventRecord.query.filter(
+            EventRecord.end_time < old_cutoff.replace(tzinfo=None)
+        ).all()
+        
+        for old_event in old_events:
+            logger.debug(f"Removing old event from database: {old_event.summary}")
+            db.session.delete(old_event)
+        
+        # Check for deleted events (only among current/future events)
+        current_db_events = EventRecord.query.filter(
+            EventRecord.end_time >= current_time.replace(tzinfo=None)
+        ).all()
+        db_event_ids = {(event.event_id, event.calendar_id) for event in current_db_events}
         api_event_ids = {(event.get('id'), event.get('sourceCalendarId')) for event in all_events}
 
         deleted_event_ids = db_event_ids - api_event_ids
@@ -327,7 +341,7 @@ def check_calendar_changes():
             ).first()
 
             if deleted_event:
-                # Check if the event's end time is in the future
+                # Only notify about deletions of future events
                 if deleted_event.end_time and deleted_event.end_time > current_time:
                     message = f"❌ Event deleted: {deleted_event.summary}\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
