@@ -352,7 +352,7 @@ def check_calendar_changes():
                 # Only notify about deletions of future events
                 current_time_naive = current_time.replace(tzinfo=None)
                 if deleted_event.end_time and deleted_event.end_time > current_time_naive:
-                    message = f"❌ Event deleted: {deleted_event.summary}\n"
+                    message = f"❌ {primary_email} deleted \"{deleted_event.summary}\"\n"
                     message += f"📅 Was scheduled for: {deleted_event.start_time.strftime('%Y-%m-%d %H:%M') if deleted_event.start_time else 'Unknown'}\n"
 
                     # Use stored calendar_name if available, otherwise fall back to calendar_id
