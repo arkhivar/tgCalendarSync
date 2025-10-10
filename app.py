@@ -67,6 +67,17 @@ def handle_db_migration():
         
         # Create all tables
         db.create_all()
+        
+        # Check if topic_mappings column exists in calendar_settings
+        if inspector.has_table("calendar_settings"):
+            columns = [col['name'] for col in inspector.get_columns("calendar_settings")]
+            if 'topic_mappings' not in columns:
+                logger.info("Adding topic_mappings column to calendar_settings table")
+                conn = db.engine.connect()
+                conn.execute(sa.text("ALTER TABLE calendar_settings ADD COLUMN topic_mappings TEXT"))
+                conn.commit()
+                conn.close()
+        
         logger.info("Database schema ready")
 
 # Import here after initializing app to avoid circular imports
