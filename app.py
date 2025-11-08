@@ -472,7 +472,9 @@ with app.app_context():
                 logger.error(f"❌ Failed to set up Google Calendar webhooks: {str(e)}")
             
             # Register the shutdown function
-            atexit.register(lambda: scheduler.shutdown())
+            def shutdown_scheduler():
+                scheduler.shutdown()
+            atexit.register(shutdown_scheduler)
     except Exception as e:
         logger.error(f"Error during initialization: {str(e)}")
         import traceback

@@ -1,4 +1,4 @@
-modules = ["python-3.11", "web"]
+modules = ["python-3.11", "web", "nodejs-20"]
 
 [nix]
 channel = "stable-25_05"
@@ -36,6 +36,10 @@ externalPort = 80
 [[ports]]
 localPort = 39603
 externalPort = 3000
+
+[[ports]]
+localPort = 43383
+externalPort = 3001
 
 [agent]
 integrations = ["google-calendar:1.0.0"]

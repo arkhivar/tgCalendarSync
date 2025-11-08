@@ -5,11 +5,12 @@ import os
 import logging
 import requests
 from datetime import datetime
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
 # Cache for the access token
-_token_cache = {
+_token_cache: Dict[str, Any] = {
     'access_token': None,
     'expires_at': None
 }
@@ -32,10 +33,13 @@ def get_access_token():
     
     # Get the authentication token for Replit API
     x_replit_token = None
-    if os.environ.get('REPL_IDENTITY'):
-        x_replit_token = 'repl ' + os.environ.get('REPL_IDENTITY')
-    elif os.environ.get('WEB_REPL_RENEWAL'):
-        x_replit_token = 'depl ' + os.environ.get('WEB_REPL_RENEWAL')
+    repl_identity = os.environ.get('REPL_IDENTITY')
+    web_repl_renewal = os.environ.get('WEB_REPL_RENEWAL')
+    
+    if repl_identity:
+        x_replit_token = 'repl ' + repl_identity
+    elif web_repl_renewal:
+        x_replit_token = 'depl ' + web_repl_renewal
     
     if not x_replit_token:
         raise ValueError('X_REPLIT_TOKEN not found for repl/depl')
@@ -99,11 +103,13 @@ def get_user_email():
     """
     hostname = os.environ.get('REPLIT_CONNECTORS_HOSTNAME')
     x_replit_token = None
+    repl_identity = os.environ.get('REPL_IDENTITY')
+    web_repl_renewal = os.environ.get('WEB_REPL_RENEWAL')
     
-    if os.environ.get('REPL_IDENTITY'):
-        x_replit_token = 'repl ' + os.environ.get('REPL_IDENTITY')
-    elif os.environ.get('WEB_REPL_RENEWAL'):
-        x_replit_token = 'depl ' + os.environ.get('WEB_REPL_RENEWAL')
+    if repl_identity:
+        x_replit_token = 'repl ' + repl_identity
+    elif web_repl_renewal:
+        x_replit_token = 'depl ' + web_repl_renewal
     
     if not x_replit_token or not hostname:
         return 'Unknown'
