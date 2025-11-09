@@ -50,6 +50,10 @@ db.init_app(app)
 # Initialize the scheduler
 scheduler = BackgroundScheduler()
 
+# Lazy initialization flag to defer expensive operations
+_initialization_done = False
+_initialization_lock = __import__('threading').Lock()
+
 # Handle database migrations
 def handle_db_migration():
     with app.app_context():
@@ -171,22 +175,93 @@ def scheduled_calendar_check():
             import traceback
             logger.error(traceback.format_exc())
 
+# Lazy initialization function
+def ensure_initialization():
+    """Ensure expensive operations have been initialized (runs once, lazily)"""
+    global _initialization_done
+    if _initialization_done:
+        return
+    
+    with _initialization_lock:
+        # Double-check inside lock to prevent race condition
+        if _initialization_done:
+            return
+        
+        try:
+            with app.app_context():
+                logger.info("Running lazy initialization...")
+                
+                # Handle database migration
+                handle_db_migration()
+                
+                # Start the scheduler if settings exist
+                settings = CalendarSettings.query.first()
+                if settings and not scheduler.running:
+                    # Only add job to renew webhook channels every 6 days (before 7-day expiration)
+                    from google_calendar_webhook import renew_expiring_channels
+                    scheduler.add_job(renew_expiring_channels, 'interval', days=6, id='webhook_renewal', replace_existing=True)
+                    
+                    scheduler.start()
+                    logger.info("Scheduler started for webhook renewal only")
+                    
+                    # Set up Google Calendar webhooks for push notifications automatically
+                    try:
+                        from google_calendar_webhook import setup_all_calendar_watches
+                        logger.info("Setting up Google Calendar webhooks automatically...")
+                        setup_all_calendar_watches()
+                        logger.info("✅ Google Calendar push notifications configured successfully")
+                    except Exception as e:
+                        logger.error(f"❌ Failed to set up Google Calendar webhooks: {str(e)}")
+                    
+                    # Register the shutdown function
+                    def shutdown_scheduler():
+                        if scheduler.running:
+                            scheduler.shutdown()
+                    atexit.register(shutdown_scheduler)
+                
+                _initialization_done = True
+                logger.info("✅ Lazy initialization completed successfully")
+        except Exception as e:
+            logger.error(f"Error during lazy initialization: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+
+# Health check endpoint - returns immediately without database calls
+@app.route('/health')
+def health():
+    """Lightweight health check for deployment - no database queries"""
+    return {'status': 'ok', 'timestamp': datetime.utcnow().isoformat()}, 200
+
 # Routes definition
 @app.route('/')
 def index():
-    settings = CalendarSettings.query.first()
+    # Trigger lazy initialization in background thread to avoid blocking
+    import threading
+    if not _initialization_done:
+        init_thread = threading.Thread(target=lambda: ensure_initialization())
+        init_thread.daemon = True
+        init_thread.start()
     
-    # Check if Google Calendar connector is configured
-    from google_connector import get_access_token, get_user_email
+    # Try to get settings but don't fail if database isn't ready
+    settings = None
     google_connected = False
     google_email = 'Not configured'
     
     try:
-        get_access_token()
-        google_connected = True
-        google_email = get_user_email()
+        settings = CalendarSettings.query.first()
+        
+        # Check if Google Calendar connector is configured
+        from google_connector import get_access_token, get_user_email
+        try:
+            get_access_token()
+            google_connected = True
+            google_email = get_user_email()
+        except Exception as e:
+            logger.debug(f"Google Calendar not connected: {str(e)}")
     except Exception as e:
-        logger.debug(f"Google Calendar not connected: {str(e)}")
+        logger.warning(f"Database not ready yet: {str(e)}")
+        # Database might not be ready during initial deployment
+        # Return a basic page that will auto-refresh
     
     is_configured = (settings is not None and 
                     settings.telegram_bot_token and 
@@ -220,6 +295,9 @@ def test_webhook():
 
 @app.route('/settings', methods=['GET', 'POST'])
 def settings():
+    # Ensure initialization has happened
+    ensure_initialization()
+    
     if request.method == 'POST':
         telegram_bot_token = request.form.get('telegram_bot_token')
         chat_id = request.form.get('chat_id')
@@ -265,6 +343,9 @@ def settings():
 
 @app.route('/run-now')
 def run_now():
+    # Ensure initialization has happened
+    ensure_initialization()
+    
     try:
         # Run in background thread to avoid blocking the request
         import threading
@@ -280,6 +361,9 @@ def run_now():
 @app.route('/debug-webhooks')
 def debug_webhooks():
     """Debug route to check webhook status and manually trigger setup"""
+    # Ensure initialization has happened
+    ensure_initialization()
+    
     try:
         from google_calendar_webhook import setup_all_calendar_watches, active_channels
         setup_all_calendar_watches()
@@ -482,39 +566,16 @@ def google_calendar_webhook():
         logger.error(traceback.format_exc())
         return "OK", 200  # Still return 200 to Google to avoid retries
 
-# Initialize database tables and start scheduler
+# Create database tables if they don't exist (lightweight operation)
 with app.app_context():
     try:
-        # Handle database migration
-        handle_db_migration()
-        
-        # Start the scheduler if settings exist
-        settings = CalendarSettings.query.first()
-        if settings:
-            # Only add job to renew webhook channels every 6 days (before 7-day expiration)
-            from google_calendar_webhook import renew_expiring_channels
-            scheduler.add_job(renew_expiring_channels, 'interval', days=6)
-            
-            scheduler.start()
-            logger.info("Scheduler started for webhook renewal only")
-            
-            # Set up Google Calendar webhooks for push notifications automatically
-            try:
-                from google_calendar_webhook import setup_all_calendar_watches
-                logger.info("Setting up Google Calendar webhooks automatically...")
-                setup_all_calendar_watches()
-                logger.info("✅ Google Calendar push notifications configured successfully")
-            except Exception as e:
-                logger.error(f"❌ Failed to set up Google Calendar webhooks: {str(e)}")
-            
-            # Register the shutdown function
-            def shutdown_scheduler():
-                scheduler.shutdown()
-            atexit.register(shutdown_scheduler)
+        # Only import models and create tables - no expensive operations
+        from models import CalendarSettings, EventRecord
+        db.create_all()
+        logger.info("Database tables created (if not exists)")
     except Exception as e:
-        logger.error(f"Error during initialization: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.warning(f"Could not create database tables during startup: {str(e)}")
+        # This is okay - tables will be created during lazy initialization
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
