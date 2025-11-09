@@ -127,8 +127,15 @@ def scheduled_calendar_check():
                     except:
                         logger.error("Failed to parse topic mappings")
                 
-                # Send notifications for each change
-                for change in changes:
+                # Limit number of messages to prevent overwhelming Telegram
+                max_messages = 20
+                if len(changes) > max_messages:
+                    logger.warning(f"Found {len(changes)} changes, limiting to {max_messages} to avoid rate limits")
+                    changes = changes[:max_messages]
+                
+                # Send notifications for each change with rate limiting
+                import time
+                for i, change in enumerate(changes):
                     message = change['message']
                     calendar_name = change.get('calendar_name', 'Unknown')
                     
@@ -140,7 +147,7 @@ def scheduled_calendar_check():
                         if not topic_id:
                             logger.warning(f"No topic mapping found for calendar '{calendar_name}', sending to General")
                     
-                    logger.info(f"Calendar change detected: {message[:50]}...")
+                    logger.info(f"Calendar change detected ({i+1}/{len(changes)}): {message[:50]}...")
                     
                     # Send the message
                     send_telegram_message(
@@ -149,6 +156,10 @@ def scheduled_calendar_check():
                         message,
                         topic_id
                     )
+                    
+                    # Add small delay between messages to avoid rate limiting (Telegram limit is 30 msg/sec)
+                    if i < len(changes) - 1:
+                        time.sleep(0.1)
                 
             # Update the last check time (naive UTC)
             from datetime import timezone
@@ -255,11 +266,15 @@ def settings():
 @app.route('/run-now')
 def run_now():
     try:
-        scheduled_calendar_check()
-        flash('Calendar check executed!', 'success')
+        # Run in background thread to avoid blocking the request
+        import threading
+        thread = threading.Thread(target=scheduled_calendar_check)
+        thread.daemon = True
+        thread.start()
+        flash('Calendar check started in background! Check Telegram for notifications.', 'success')
     except Exception as e:
-        logger.error(f"Error during manual calendar check: {str(e)}")
-        flash(f'Error during calendar check: {str(e)}', 'danger')
+        logger.error(f"Error starting calendar check: {str(e)}")
+        flash(f'Error starting calendar check: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/debug-webhooks')
