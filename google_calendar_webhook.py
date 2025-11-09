@@ -153,3 +153,10 @@ def setup_all_calendar_watches():
 
     success_count = 0
     for calendar in calendars:
+        try:
+            calendar_id = calendar['id']
+            create_watch_channel(service, calendar_id)
+            success_count += 1
+        except Exception as e:
+            logger.error(f"Failed to set up webhook for calendar {calendar.get('id', 'unknown')}: {str(e)}")
+            continue
