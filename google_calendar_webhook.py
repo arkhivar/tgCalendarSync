@@ -34,6 +34,11 @@ def create_watch_channel(service, calendar_id='primary'):
 
         # Get the webhook URL - must be HTTPS in production
         # Debug: log all relevant environment variables
+        print(f"🔍 Environment check:")
+        print(f"   WEB_REPL_RENEWAL: {os.environ.get('WEB_REPL_RENEWAL', 'NOT SET')[:20] if os.environ.get('WEB_REPL_RENEWAL') else 'NOT SET'}")
+        print(f"   REPL_IDENTITY: {os.environ.get('REPL_IDENTITY', 'NOT SET')[:20] if os.environ.get('REPL_IDENTITY') else 'NOT SET'}")
+        print(f"   DATABASE_URL: {'SET' if os.environ.get('DATABASE_URL') else 'NOT SET'}")
+        
         logger.info(f"🔍 Environment check:")
         logger.info(f"   WEB_REPL_RENEWAL: {os.environ.get('WEB_REPL_RENEWAL', 'NOT SET')[:20] if os.environ.get('WEB_REPL_RENEWAL') else 'NOT SET'}")
         logger.info(f"   REPL_IDENTITY: {os.environ.get('REPL_IDENTITY', 'NOT SET')[:20] if os.environ.get('REPL_IDENTITY') else 'NOT SET'}")
@@ -51,15 +56,17 @@ def create_watch_channel(service, calendar_id='primary'):
         if is_deployment:
             # In deployment, use the replit.app domain
             webhook_url = f"https://{repl_slug}-{repl_owner}.replit.app/webhook/google-calendar"
-            logger.info(f"🚀 DEPLOYMENT MODE DETECTED (WEB_REPL_RENEWAL present)")
+            print(f"🚀 DEPLOYMENT MODE DETECTED")
+            logger.info(f"🚀 DEPLOYMENT MODE DETECTED")
         else:
             # In development, use the repl.co domain
             webhook_url = f"https://{repl_slug}.{repl_owner}.repl.co/webhook/google-calendar"
-            logger.info(f"🔧 DEVELOPMENT MODE (WEB_REPL_RENEWAL not present)")
+            print(f"🔧 DEVELOPMENT MODE")
+            logger.info(f"🔧 DEVELOPMENT MODE")
 
         # Log the exact URL being used
-        logger.info(f"📍 Using webhook URL: {webhook_url}")
         print(f"📍 Using webhook URL: {webhook_url}")
+        logger.info(f"📍 Using webhook URL: {webhook_url}")
 
         # Set expiration (max 1 week for calendar API)
         expiration = int((datetime.utcnow() + timedelta(days=7)).timestamp() * 1000)

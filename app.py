@@ -533,11 +533,13 @@ def google_calendar_webhook():
         }, 200
     
     # Enhanced logging for POST requests
-    print("\n" + "=" * 80)
-    print(f"🔔 WEBHOOK POST RECEIVED at {datetime.utcnow()}")
-    print(f"From IP: {request.remote_addr}")
-    print(f"User-Agent: {request.headers.get('User-Agent', 'N/A')}")
-    print("=" * 80)
+    import sys
+    print("\n" + "=" * 80, flush=True)
+    print(f"🔔 WEBHOOK POST RECEIVED at {datetime.utcnow()}", flush=True)
+    print(f"From IP: {request.remote_addr}", flush=True)
+    print(f"User-Agent: {request.headers.get('User-Agent', 'N/A')}", flush=True)
+    print("=" * 80, flush=True)
+    sys.stdout.flush()
     
     try:
         # Google sends notifications with specific headers
@@ -546,14 +548,16 @@ def google_calendar_webhook():
         resource_id = request.headers.get('X-Goog-Resource-ID')
         
         # Log ALL headers for debugging
-        print(f"📋 Channel ID: {channel_id}")
-        print(f"📋 Resource State: {resource_state}")
-        print(f"📋 Resource ID: {resource_id}")
-        print(f"📋 All Headers:")
+        import sys
+        print(f"📋 Channel ID: {channel_id}", flush=True)
+        print(f"📋 Resource State: {resource_state}", flush=True)
+        print(f"📋 Resource ID: {resource_id}", flush=True)
+        print(f"📋 All Headers:", flush=True)
         for header, value in request.headers.items():
-            print(f"   {header}: {value}")
-        print(f"📋 Request Body: {request.get_data(as_text=True) or '(empty)'}")
-        print("=" * 80 + "\n")
+            print(f"   {header}: {value}", flush=True)
+        print(f"📋 Request Body: {request.get_data(as_text=True) or '(empty)'}", flush=True)
+        print("=" * 80 + "\n", flush=True)
+        sys.stdout.flush()
         
         logger.info("=" * 50)
         logger.info(f"WEBHOOK RECEIVED - Google Calendar notification")
