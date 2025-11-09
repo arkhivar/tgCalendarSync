@@ -365,20 +365,46 @@ def debug_webhooks():
     ensure_initialization()
     
     try:
-        from google_calendar_webhook import setup_all_calendar_watches, active_channels
-        setup_all_calendar_watches()
+        from google_calendar_webhook import setup_all_calendar_watches, get_active_webhook_status
         
-        # Show active channels
-        channels_info = []
-        for cal_id, channel in active_channels.items():
-            from datetime import datetime
-            expiry = datetime.fromtimestamp(channel['expiration'] / 1000)
-            channels_info.append(f"{cal_id[:30]}... expires {expiry}")
+        # Get current status before setup
+        current_status = get_active_webhook_status()
         
-        flash(f'Webhooks configured for {len(active_channels)} calendars. ' + '; '.join(channels_info), 'success')
+        # Show detailed webhook information
+        import json
+        status_html = "<h3>Current Webhook Status</h3><pre>" + json.dumps(current_status, indent=2) + "</pre>"
+        status_html += f"<p><strong>Total active webhooks:</strong> {len(current_status)}</p>"
+        status_html += f"<p><strong>Webhook endpoint:</strong> {request.url_root}webhook/google-calendar</p>"
+        
+        return status_html
     except Exception as e:
-        logger.error(f"Error setting up webhooks: {str(e)}")
-        flash(f'Error setting up webhooks: {str(e)}', 'danger')
+        logger.error(f"Error getting webhook status: {str(e)}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/test-webhook-post')
+def test_webhook_post():
+    """Test endpoint to simulate a Google Calendar webhook POST"""
+    try:
+        import requests
+        webhook_url = f"{request.url_root}webhook/google-calendar"
+        
+        # Simulate a Google Calendar webhook notification
+        headers = {
+            'X-Goog-Channel-ID': 'test-channel-12345',
+            'X-Goog-Resource-State': 'exists',
+            'X-Goog-Resource-ID': 'test-resource-67890'
+        }
+        
+        print("=" * 80)
+        print(f"🧪 SIMULATING WEBHOOK POST to {webhook_url}")
+        print(f"Headers: {headers}")
+        print("=" * 80)
+        
+        response = requests.post(webhook_url, headers=headers)
+        
+        flash(f'Test webhook POST sent. Status: {response.status_code}. Check console for webhook processing logs.', 'info')
+    except Exception as e:
+        flash(f'Error testing webhook: {str(e)}', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/test-calendar-check')

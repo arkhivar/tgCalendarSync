@@ -1,4 +1,3 @@
-
 """
 Google Calendar Push Notification (Webhook) Handler
 Uses Google Calendar API's watch/push notification feature for near-instant updates
@@ -21,34 +20,34 @@ active_channels = {}
 def create_watch_channel(service, calendar_id='primary'):
     """
     Create a push notification channel for a calendar
-    
+
     Args:
         service: Google Calendar API service
         calendar_id: ID of the calendar to watch
-    
+
     Returns:
         dict: Channel information including id and resource_id
     """
     try:
         # Generate a unique channel ID
         channel_id = str(uuid.uuid4())
-        
+
         # Get the webhook URL - must be HTTPS in production
         # Debug: log all relevant environment variables
         logger.info(f"🔍 Environment check:")
         logger.info(f"   WEB_REPL_RENEWAL: {os.environ.get('WEB_REPL_RENEWAL', 'NOT SET')[:20] if os.environ.get('WEB_REPL_RENEWAL') else 'NOT SET'}")
         logger.info(f"   REPL_IDENTITY: {os.environ.get('REPL_IDENTITY', 'NOT SET')[:20] if os.environ.get('REPL_IDENTITY') else 'NOT SET'}")
         logger.info(f"   DATABASE_URL: {'SET' if os.environ.get('DATABASE_URL') else 'NOT SET'}")
-        
+
         # Try multiple detection methods
         is_deployment = (
             os.environ.get('WEB_REPL_RENEWAL') is not None or
             os.environ.get('DATABASE_URL') is not None  # PostgreSQL only in deployment
         )
-        
+
         repl_slug = os.environ.get('REPL_SLUG', 'workspace')
         repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
-        
+
         if is_deployment:
             # In deployment, use the replit.app domain
             webhook_url = f"https://{repl_slug}-{repl_owner}.replit.app/webhook/google-calendar"
@@ -57,17 +56,17 @@ def create_watch_channel(service, calendar_id='primary'):
             # In development, use the repl.co domain
             webhook_url = f"https://{repl_slug}.{repl_owner}.repl.co/webhook/google-calendar"
             logger.info(f"🔧 DEVELOPMENT MODE (WEB_REPL_RENEWAL not present)")
-        
+
         # Log the exact URL being used
         logger.info(f"📍 Using webhook URL: {webhook_url}")
         print(f"📍 Using webhook URL: {webhook_url}")
-        
+
         # Set expiration (max 1 week for calendar API)
         expiration = int((datetime.utcnow() + timedelta(days=7)).timestamp() * 1000)
-        
+
         logger.info(f"🔔 Setting up webhook for {calendar_id[:40]}...")
         logger.info(f"   Webhook URL: {webhook_url}")
-        
+
         # Create the watch request
         watch_request = {
             'id': channel_id,
@@ -75,25 +74,26 @@ def create_watch_channel(service, calendar_id='primary'):
             'address': webhook_url,
             'expiration': expiration
         }
-        
+
         # Execute the watch request
         channel = service.events().watch(
             calendarId=calendar_id,
             body=watch_request
         ).execute()
-        
+
         expiry_date = datetime.fromtimestamp(expiration / 1000)
         logger.info(f"✅ Created watch channel for {calendar_id[:40]}... (expires {expiry_date})")
-        
+
         # Store channel info
         active_channels[calendar_id] = {
             'id': channel['id'],
             'resourceId': channel['resourceId'],
-            'expiration': expiration
+            'expiration': expiration,
+            'address': webhook_url # Store address for status reporting
         }
-        
+
         return channel
-        
+
     except Exception as e:
         logger.error(f"❌ Error creating watch channel for calendar {calendar_id}: {str(e)}")
         raise
@@ -101,7 +101,7 @@ def create_watch_channel(service, calendar_id='primary'):
 def stop_watch_channel(service, channel_id, resource_id):
     """
     Stop a push notification channel
-    
+
     Args:
         service: Google Calendar API service
         channel_id: ID of the channel to stop
@@ -112,59 +112,37 @@ def stop_watch_channel(service, channel_id, resource_id):
             'id': channel_id,
             'resourceId': resource_id
         }).execute()
-        
+
         logger.info(f"Stopped watch channel {channel_id}")
-        
+
     except Exception as e:
         logger.error(f"Error stopping watch channel {channel_id}: {str(e)}")
 
+def get_active_webhook_status():
+    """
+    Get status of all active webhook channels
+    """
+    status = []
+    for cal_id, channel_info in active_channels.items():
+        from datetime import datetime
+        expiry = datetime.fromtimestamp(channel_info['expiration'] / 1000)
+        status.append({
+            'calendar_id': cal_id[:50],
+            'channel_id': channel_info['id'],
+            'resource_id': channel_info['resourceId'],
+            'expiry': expiry.isoformat(),
+            'webhook_url': channel_info.get('address', 'N/A')
+        })
+    return status
+
 def setup_all_calendar_watches():
     """
-    Set up push notification channels for all calendars
+    Set up watch channels for all calendars
     """
-    try:
-        from calendar_monitor import get_google_service, get_user_calendars
-        
-        service = get_google_service()
-        calendars = get_user_calendars(service)
-        
-        for calendar in calendars:
-            cal_id = calendar.get('id')
-            try:
-                create_watch_channel(service, cal_id)
-            except Exception as e:
-                logger.error(f"Failed to create watch for calendar {cal_id}: {str(e)}")
-        
-        logger.info(f"Set up watch channels for {len(calendars)} calendars")
-        
-    except Exception as e:
-        logger.error(f"Error setting up calendar watches: {str(e)}")
+    logger.info(f"Setting up webhook channels for all calendars...")
 
-def renew_expiring_channels():
-    """
-    Renew channels that are about to expire (within 24 hours)
-    """
-    try:
-        from calendar_monitor import get_google_service
-        
-        service = get_google_service()
-        current_time = int(datetime.utcnow().timestamp() * 1000)
-        renewal_threshold = current_time + (24 * 60 * 60 * 1000)  # 24 hours
-        
-        for cal_id, channel_info in list(active_channels.items()):
-            if channel_info['expiration'] < renewal_threshold:
-                # Stop old channel
-                try:
-                    stop_watch_channel(service, channel_info['id'], channel_info['resourceId'])
-                except:
-                    pass
-                
-                # Create new channel
-                try:
-                    create_watch_channel(service, cal_id)
-                    logger.info(f"Renewed watch channel for calendar {cal_id}")
-                except Exception as e:
-                    logger.error(f"Failed to renew watch for calendar {cal_id}: {str(e)}")
-        
-    except Exception as e:
-        logger.error(f"Error renewing channels: {str(e)}")
+    service = get_google_service()
+    calendars = get_user_calendars(service)
+
+    success_count = 0
+    for calendar in calendars:
