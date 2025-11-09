@@ -299,20 +299,41 @@ def debug_webhooks():
 
 @app.route('/test-calendar-check')
 def test_calendar_check():
-    """Manually trigger a calendar check to test the notification pipeline"""
+    """Manually trigger a calendar check to test the notification pipeline - only checks last hour"""
     try:
         print("=" * 50)
-        print("🧪 MANUAL CALENDAR CHECK TRIGGERED")
+        print("🧪 MANUAL CALENDAR CHECK TRIGGERED (Last hour only)")
         print(f"Time: {datetime.utcnow()}")
         print("=" * 50)
         
-        # Run the calendar check in the same way the webhook would
-        import threading
-        thread = threading.Thread(target=scheduled_calendar_check)
-        thread.daemon = True
-        thread.start()
-        
-        flash('Manual calendar check triggered! Check console for output and Telegram for messages.', 'info')
+        # Temporarily set last_check to 1 hour ago for this test
+        settings = CalendarSettings.query.first()
+        if settings:
+            from datetime import timezone
+            original_last_check = settings.last_check
+            settings.last_check = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
+            db.session.commit()
+            
+            # Run the calendar check
+            import threading
+            def test_check_with_restore():
+                try:
+                    scheduled_calendar_check()
+                finally:
+                    # Restore original last_check time
+                    with app.app_context():
+                        settings_restore = CalendarSettings.query.first()
+                        if settings_restore:
+                            settings_restore.last_check = original_last_check
+                            db.session.commit()
+            
+            thread = threading.Thread(target=test_check_with_restore)
+            thread.daemon = True
+            thread.start()
+            
+            flash('Manual calendar check triggered for events from the last hour only! Check Telegram for messages.', 'info')
+        else:
+            flash('Settings not configured', 'warning')
     except Exception as e:
         logger.error(f"Error in manual calendar check: {str(e)}")
         flash(f'Error: {str(e)}', 'danger')
