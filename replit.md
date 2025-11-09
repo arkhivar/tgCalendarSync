@@ -41,12 +41,26 @@ gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
 
 **Port 5000** is used as it's the standard forwarded port in Replit deployments.
 
-### Deployment Configuration
-When deploying, the application:
-1. Uses PostgreSQL instead of SQLite
-2. Sets up webhook channels automatically on startup
-3. Schedules webhook renewal every 6 days
-4. Runs on a dedicated or autoscale VM for 24/7 availability
+### Deployment Configuration (Autoscale Optimized)
+The application is optimized for **Autoscale deployment** to minimize costs while supporting webhook-based architecture:
+
+**Cost-Saving Features:**
+- Scales to zero when idle (no calendar events)
+- Only pays for compute when processing webhooks
+- Instant startup with lazy initialization pattern
+
+**Deployment Process:**
+1. Health check endpoint (`/health`) responds instantly for deployment verification
+2. Lightweight startup creates database tables only
+3. Expensive operations (webhook setup, scheduler) run lazily in background after first request
+4. Uses PostgreSQL for production data persistence
+5. Webhook channels renewed automatically every 6 days
+
+**Technical Details:**
+- Autoscale deployment target for variable traffic
+- Thread-safe lazy initialization with double-checked locking
+- Graceful degradation when database isn't immediately available
+- Fast health checks prevent deployment timeouts
 
 ## User Preferences
 - **Communication style**: Simple, everyday language
@@ -92,7 +106,7 @@ When deploying, the application:
   - Calendar Management (`user_calendar.html`): Google Calendar account configuration
 
 ### Monitoring & Notification System
-- **Event Change Detection**: Webhook-driven real-time notifications
+- **Event Change Detection**: Webhook-driven real-time notifications (not polling)
 - **Notification Pipeline**:
   1. Google Calendar sends webhook POST to `/webhook/google-calendar`
   2. Application fetches updated event details from Google Calendar API
@@ -101,6 +115,7 @@ When deploying, the application:
   5. Database updated with latest event information
 - **Webhook Renewal**: Background scheduler renews channels every 6 days (before 7-day expiration)
 - **Statistics Tracking**: Aggregates calendar activity data for reporting (last 30 days default)
+- **Health Check**: Dedicated `/health` endpoint for deployment monitoring (no database queries)
 
 ### Configuration Management
 - **Environment Variables**: Managed by Replit connector and deployment system
