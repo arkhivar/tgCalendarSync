@@ -34,16 +34,17 @@ def create_watch_channel(service, calendar_id='primary'):
         channel_id = str(uuid.uuid4())
         
         # Get the webhook URL - must be HTTPS in production
-        # Use deployment URL if deployed, otherwise use dev URL
-        if os.environ.get('REPLIT_DEPLOYMENT'):
+        # Check if we're in a deployment by looking for WEB_REPL_RENEWAL token
+        is_deployment = os.environ.get('WEB_REPL_RENEWAL') is not None
+        
+        repl_slug = os.environ.get('REPL_SLUG', 'workspace')
+        repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
+        
+        if is_deployment:
             # In deployment, use the replit.app domain
-            repl_slug = os.environ.get('REPL_SLUG', 'workspace')
-            repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
             webhook_url = f"https://{repl_slug}-{repl_owner}.replit.app/webhook/google-calendar"
         else:
             # In development, use the repl.co domain
-            repl_slug = os.environ.get('REPL_SLUG', 'workspace')
-            repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
             webhook_url = f"https://{repl_slug}.{repl_owner}.repl.co/webhook/google-calendar"
         
         # Log the exact URL being used
