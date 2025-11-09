@@ -493,17 +493,24 @@ def google_calendar_webhook():
     
     # Handle GET requests (for testing accessibility)
     if request.method == 'GET':
-        print("=" * 50)
+        print("=" * 80)
         print(f"🧪 WEBHOOK GET REQUEST - Testing accessibility")
         print(f"URL: {request.url}")
         print(f"Time: {datetime.utcnow()}")
-        print("=" * 50)
+        print("=" * 80)
         return {
             'status': 'ok',
             'message': 'Google Calendar webhook endpoint is accessible',
             'url': request.url,
             'timestamp': datetime.utcnow().isoformat()
         }, 200
+    
+    # Enhanced logging for POST requests
+    print("\n" + "=" * 80)
+    print(f"🔔 WEBHOOK POST RECEIVED at {datetime.utcnow()}")
+    print(f"From IP: {request.remote_addr}")
+    print(f"User-Agent: {request.headers.get('User-Agent', 'N/A')}")
+    print("=" * 80)
     
     try:
         # Google sends notifications with specific headers
@@ -512,17 +519,14 @@ def google_calendar_webhook():
         resource_id = request.headers.get('X-Goog-Resource-ID')
         
         # Log ALL headers for debugging
-        print("=" * 50)
-        print(f"🔔 WEBHOOK POST RECEIVED - Google Calendar notification")
-        print(f"Time: {datetime.utcnow()}")
-        print(f"Channel ID: {channel_id}")
-        print(f"Resource State: {resource_state}")
-        print(f"Resource ID: {resource_id}")
-        print(f"All headers: {dict(request.headers)}")
-        print(f"Request method: {request.method}")
-        print(f"Request path: {request.path}")
-        print(f"Request body: {request.get_data(as_text=True)}")
-        print("=" * 50)
+        print(f"📋 Channel ID: {channel_id}")
+        print(f"📋 Resource State: {resource_state}")
+        print(f"📋 Resource ID: {resource_id}")
+        print(f"📋 All Headers:")
+        for header, value in request.headers.items():
+            print(f"   {header}: {value}")
+        print(f"📋 Request Body: {request.get_data(as_text=True) or '(empty)'}")
+        print("=" * 80 + "\n")
         
         logger.info("=" * 50)
         logger.info(f"WEBHOOK RECEIVED - Google Calendar notification")
@@ -536,25 +540,25 @@ def google_calendar_webhook():
         # Process the actual change in the background
         if resource_state == 'sync':
             # This is just a verification sync, acknowledge it
-            print("Received SYNC notification from Google Calendar (initial setup)")
-            logger.info("Received SYNC notification from Google Calendar (initial setup)")
+            print("✅ SYNC notification (webhook setup confirmation)")
+            logger.info("✅ SYNC notification (webhook setup confirmation)")
             return "OK", 200
         
         if resource_state == 'exists':
             # Calendar has changes, trigger a check
-            print("⚡ CALENDAR CHANGE DETECTED via webhook! Triggering immediate check...")
-            logger.info("⚡ CALENDAR CHANGE DETECTED via webhook! Triggering immediate check...")
+            print("🚀 CHANGE DETECTED! Starting notification pipeline...")
+            logger.info("🚀 CHANGE DETECTED! Starting notification pipeline...")
             
             # Run calendar check in background to avoid blocking webhook response
             import threading
             thread = threading.Thread(target=scheduled_calendar_check)
             thread.daemon = True
             thread.start()
-            print("✅ Background thread started for calendar check")
-            logger.info("✅ Background thread started for calendar check")
+            print("✅ Background notification thread started")
+            logger.info("✅ Background notification thread started")
         else:
-            print(f"Unknown resource state: {resource_state}")
-            logger.warning(f"Unknown resource state: {resource_state}")
+            print(f"⚠️  Unknown resource state: {resource_state}")
+            logger.warning(f"⚠️  Unknown resource state: {resource_state}")
         
         return "OK", 200
         
