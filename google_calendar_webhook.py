@@ -34,8 +34,17 @@ def create_watch_channel(service, calendar_id='primary'):
         channel_id = str(uuid.uuid4())
         
         # Get the webhook URL - must be HTTPS in production
-        # WEB_REPL_RENEWAL is only available in deployments, not in dev environment
-        is_deployment = os.environ.get('WEB_REPL_RENEWAL') is not None
+        # Debug: log all relevant environment variables
+        logger.info(f"🔍 Environment check:")
+        logger.info(f"   WEB_REPL_RENEWAL: {os.environ.get('WEB_REPL_RENEWAL', 'NOT SET')[:20] if os.environ.get('WEB_REPL_RENEWAL') else 'NOT SET'}")
+        logger.info(f"   REPL_IDENTITY: {os.environ.get('REPL_IDENTITY', 'NOT SET')[:20] if os.environ.get('REPL_IDENTITY') else 'NOT SET'}")
+        logger.info(f"   DATABASE_URL: {'SET' if os.environ.get('DATABASE_URL') else 'NOT SET'}")
+        
+        # Try multiple detection methods
+        is_deployment = (
+            os.environ.get('WEB_REPL_RENEWAL') is not None or
+            os.environ.get('DATABASE_URL') is not None  # PostgreSQL only in deployment
+        )
         
         repl_slug = os.environ.get('REPL_SLUG', 'workspace')
         repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
