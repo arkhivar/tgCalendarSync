@@ -160,3 +160,77 @@ def setup_all_calendar_watches():
         except Exception as e:
             logger.error(f"Failed to set up webhook for calendar {calendar.get('id', 'unknown')}: {str(e)}")
             continue
+    
+    logger.info(f"✅ Set up {success_count} webhook channels out of {len(calendars)} calendars")
+    return success_count
+
+def get_google_service():
+    """
+    Get authenticated Google Calendar API service
+    """
+    try:
+        access_token = get_access_token()
+        credentials = GoogleCredentials(token=access_token)
+        service = build('calendar', 'v3', credentials=credentials)
+        return service
+    except Exception as e:
+        logger.error(f"Failed to create Google Calendar service: {str(e)}")
+        raise
+
+def get_user_calendars(service):
+    """
+    Get list of user's calendars
+    """
+    try:
+        calendar_list = service.calendarList().list().execute()
+        calendars = calendar_list.get('items', [])
+        logger.info(f"Found {len(calendars)} calendars")
+        return calendars
+    except Exception as e:
+        logger.error(f"Failed to get calendar list: {str(e)}")
+        raise
+
+def renew_expiring_channels():
+    """
+    Renew webhook channels that are about to expire (within 1 day)
+    This should be run periodically (e.g., every 6 days)
+    """
+    from app import app
+    
+    with app.app_context():
+        try:
+            logger.info("Checking for expiring webhook channels...")
+            current_time = datetime.utcnow().timestamp() * 1000
+            
+            channels_to_renew = []
+            for cal_id, channel_info in active_channels.items():
+                time_until_expiry = channel_info['expiration'] - current_time
+                days_until_expiry = time_until_expiry / (1000 * 60 * 60 * 24)
+                
+                if days_until_expiry < 1:
+                    channels_to_renew.append((cal_id, channel_info))
+            
+            if not channels_to_renew:
+                logger.info("No webhook channels need renewal")
+                return
+            
+            logger.info(f"Renewing {len(channels_to_renew)} expiring webhook channels...")
+            
+            service = get_google_service()
+            
+            for cal_id, old_channel in channels_to_renew:
+                try:
+                    # Stop the old channel
+                    stop_watch_channel(service, old_channel['id'], old_channel['resourceId'])
+                    
+                    # Create a new channel
+                    create_watch_channel(service, cal_id)
+                    
+                    logger.info(f"✅ Renewed webhook for calendar {cal_id[:40]}...")
+                except Exception as e:
+                    logger.error(f"Failed to renew webhook for calendar {cal_id}: {str(e)}")
+            
+        except Exception as e:
+            logger.error(f"Error in webhook renewal: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
