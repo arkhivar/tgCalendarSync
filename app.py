@@ -411,10 +411,11 @@ def test_webhook_post():
 def test_calendar_check():
     """Manually trigger a calendar check to test the notification pipeline - only checks last hour"""
     try:
-        print("=" * 50)
+        print("=" * 80)
         print("🧪 MANUAL CALENDAR CHECK TRIGGERED (Last hour only)")
         print(f"Time: {datetime.utcnow()}")
-        print("=" * 50)
+        print("This will compare Google Calendar API data with database state")
+        print("=" * 80)
         
         # Temporarily set last_check to 1 hour ago for this test
         settings = CalendarSettings.query.first()

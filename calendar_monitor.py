@@ -22,11 +22,11 @@ def get_google_service():
     try:
         # Get access token from the Replit connector
         access_token = get_access_token()
-        
+
         # Create credentials object with just the access token
         # The connector handles refresh automatically
         credentials = GoogleCredentials(token=access_token)
-        
+
         # Build the service
         service = build('calendar', 'v3', credentials=credentials)
         return service
@@ -207,7 +207,7 @@ def check_calendar_changes():
                 start_time_naive = start_time.replace(tzinfo=None) if start_time else None
                 end_time_naive = end_time.replace(tzinfo=None) if end_time else None
                 updated_time_naive = updated_time.replace(tzinfo=None) if updated_time else None
-                
+
                 new_event = EventRecord(
                     event_id=event_id,
                     calendar_id=source_calendar_id,
@@ -249,7 +249,7 @@ def check_calendar_changes():
                 # Make both datetimes naive UTC for comparison
                 updated_time_naive = updated_time.replace(tzinfo=None) if updated_time.tzinfo else updated_time
                 existing_updated_naive = existing_event.last_updated.replace(tzinfo=None) if existing_event.last_updated.tzinfo else existing_event.last_updated
-                
+
                 if updated_time_naive > existing_updated_naive:
                     # Event was updated
                     changes_desc = []
@@ -258,12 +258,16 @@ def check_calendar_changes():
                         changes_desc.append(f"Title changed from '{existing_event.summary}' to '{summary}'")
                         existing_event.summary = summary
 
-                    # Handle datetime comparison
+                    # Check if start time changed (this is what happens when you reschedule!)
                     start_time_changed = False
                     if existing_event.start_time and start_time:
                         existing_time_str = existing_event.start_time.strftime('%Y-%m-%d %H:%M')
                         new_time_str = start_time.strftime('%Y-%m-%d %H:%M')
                         start_time_changed = existing_time_str != new_time_str
+
+                        # Debug logging for time changes
+                        if start_time_changed:
+                            logger.info(f"🕐 Time change detected for '{summary}': {existing_time_str} → {new_time_str}")
                     else:
                         start_time_changed = existing_event.start_time != start_time
 
@@ -272,7 +276,7 @@ def check_calendar_changes():
                         if existing_event.start_time and start_time:
                             old_date = existing_event.start_time.strftime('%Y-%m-%d')
                             new_date = start_time.strftime('%Y-%m-%d')
-                            
+
                             if old_date == new_date:
                                 # Same day - show only time
                                 old_time = existing_event.start_time.strftime('%H:%M')
@@ -284,7 +288,7 @@ def check_calendar_changes():
                         else:
                             old_time = existing_event.start_time.strftime('%Y-%m-%d %H:%M') if existing_event.start_time else 'Unknown'
                             new_time = start_time.strftime('%Y-%m-%d %H:%M') if start_time else 'Unknown'
-                        
+
                         changes_desc.append(f"Start time changed from {old_time} to {new_time}")
                         existing_event.start_time = start_time.replace(tzinfo=None) if start_time else None
 
@@ -334,12 +338,12 @@ def check_calendar_changes():
         old_events_count = EventRecord.query.filter(
             EventRecord.end_time < old_cutoff
         ).delete()
-        
+
         if old_events_count > 0:
             logger.info(f"Removed {old_events_count} old events from database")
-        
+
         # Check for deleted events (only among current/future events)
-        db_event_ids = {(event.event_id, event.calendar_id) for event in existing_events_dict.values() 
+        db_event_ids = {(event.event_id, event.calendar_id) for event in existing_events_dict.values()
                         if event.end_time and event.end_time >= current_time.replace(tzinfo=None)}
         api_event_ids = {(event.get('id'), event.get('sourceCalendarId')) for event in all_events}
 
