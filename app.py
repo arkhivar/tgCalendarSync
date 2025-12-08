@@ -278,13 +278,32 @@ def index():
                     settings.telegram_bot_token and 
                     settings.chat_id and 
                     google_connected)
+    
+    # Calculate change statistics
+    changes_hour = 0
+    changes_day = 0
+    changes_week = 0
+    try:
+        now = datetime.utcnow()
+        hour_ago = now - timedelta(hours=1)
+        day_ago = now - timedelta(days=1)
+        week_ago = now - timedelta(weeks=1)
+        
+        changes_hour = EventRecord.query.filter(EventRecord.last_updated >= hour_ago).count()
+        changes_day = EventRecord.query.filter(EventRecord.last_updated >= day_ago).count()
+        changes_week = EventRecord.query.filter(EventRecord.last_updated >= week_ago).count()
+    except Exception as e:
+        logger.debug(f"Could not fetch change stats: {str(e)}")
                     
     return render_template(
         'index.html', 
         is_configured=is_configured,
         settings=settings,
         google_connected=google_connected,
-        google_email=google_email
+        google_email=google_email,
+        changes_hour=changes_hour,
+        changes_day=changes_day,
+        changes_week=changes_week
     )
 
 @app.route('/debug-env')

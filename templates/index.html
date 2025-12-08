@@ -115,12 +115,35 @@
                         <h3 class="card-title mb-0"><i class="bi bi-info-circle me-2"></i>System Status</h3>
                     </div>
                     <div class="card-body">
-                        <p><strong>Check Interval:</strong> {{ settings.check_interval }} minutes</p>
-                        <p><strong>Last Check:</strong> {{ settings.last_check|vladivostok_time }} (Vladivostok)</p>
-                        <p class="mb-0"><strong>Supergroup Mode:</strong> {{ 'Enabled' if settings.is_supergroup else 'Disabled' }}</p>
+                        <p><strong>Mode:</strong> <span class="badge bg-success">Real-time (webhooks)</span></p>
+                        <p><strong>Last Update:</strong> {{ settings.last_check|vladivostok_time }} (Vladivostok)</p>
+                        <p><strong>Supergroup Mode:</strong> {{ 'Enabled' if settings.is_supergroup else 'Disabled' }}</p>
+                        <div class="mt-3">
+                            <strong>Recent Activity:</strong>
+                            <span id="changes-count" class="badge bg-primary ms-2">{{ changes_hour }}</span>
+                            <span id="changes-label">changes in the last</span>
+                            <select id="time-period" class="form-select d-inline-block w-auto ms-1" onchange="updateChangesDisplay()">
+                                <option value="hour" selected>hour</option>
+                                <option value="day">day</option>
+                                <option value="week">week</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 {% endif %}
+                
+                <script>
+                    const changesData = {
+                        hour: {{ changes_hour }},
+                        day: {{ changes_day }},
+                        week: {{ changes_week }}
+                    };
+                    
+                    function updateChangesDisplay() {
+                        const period = document.getElementById('time-period').value;
+                        document.getElementById('changes-count').textContent = changesData[period];
+                    }
+                </script>
             </div>
         </div>
     </div>
