@@ -33,6 +33,15 @@ waitForPort = 5000
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 37491
+externalPort = 3000
+
 [agent]
 integrations = ["google-calendar:1.0.0"]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+PRODUCTION_DOMAIN = "tg-calendar-sync-arkhivar.replit.app"

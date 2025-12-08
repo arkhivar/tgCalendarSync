@@ -44,25 +44,13 @@ def create_watch_channel(service, calendar_id='primary'):
         logger.info(f"   REPL_IDENTITY: {os.environ.get('REPL_IDENTITY', 'NOT SET')[:20] if os.environ.get('REPL_IDENTITY') else 'NOT SET'}")
         logger.info(f"   DATABASE_URL: {'SET' if os.environ.get('DATABASE_URL') else 'NOT SET'}")
 
-        # Try multiple detection methods
-        is_deployment = (
-            os.environ.get('WEB_REPL_RENEWAL') is not None or
-            os.environ.get('DATABASE_URL') is not None  # PostgreSQL only in deployment
-        )
-
-        repl_slug = os.environ.get('REPL_SLUG', 'workspace')
-        repl_owner = os.environ.get('REPL_OWNER', 'arkhivar')
-
-        if is_deployment:
-            # In deployment, use the replit.app domain
-            webhook_url = f"https://{repl_slug}-{repl_owner}.replit.app/webhook/google-calendar"
-            print(f"🚀 DEPLOYMENT MODE DETECTED")
-            logger.info(f"🚀 DEPLOYMENT MODE DETECTED")
-        else:
-            # In development, use the repl.co domain
-            webhook_url = f"https://{repl_slug}.{repl_owner}.repl.co/webhook/google-calendar"
-            print(f"🔧 DEVELOPMENT MODE")
-            logger.info(f"🔧 DEVELOPMENT MODE")
+        # Use explicit production domain from environment variable
+        production_domain = os.environ.get('PRODUCTION_DOMAIN', 'tg-calendar-sync-arkhivar.replit.app')
+        
+        # Always use the production domain for webhooks (Google requires stable HTTPS URL)
+        webhook_url = f"https://{production_domain}/webhook/google-calendar"
+        print(f"🚀 Using production domain for webhooks: {production_domain}")
+        logger.info(f"🚀 Using production domain for webhooks: {production_domain}")
 
         # Log the exact URL being used
         print(f"📍 Using webhook URL: {webhook_url}")
