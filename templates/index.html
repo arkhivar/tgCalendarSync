@@ -116,7 +116,7 @@
                     </div>
                     <div class="card-body">
                         <p><strong>Check Interval:</strong> {{ settings.check_interval }} minutes</p>
-                        <p><strong>Last Check:</strong> {{ settings.last_check.strftime('%Y-%m-%d %H:%M:%S') if settings.last_check else 'Never' }}</p>
+                        <p><strong>Last Check:</strong> {{ settings.last_check|vladivostok_time }} (Vladivostok)</p>
                         <p class="mb-0"><strong>Supergroup Mode:</strong> {{ 'Enabled' if settings.is_supergroup else 'Disabled' }}</p>
                     </div>
                 </div>

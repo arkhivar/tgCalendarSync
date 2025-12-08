@@ -226,6 +226,17 @@ def ensure_initialization():
             import traceback
             logger.error(traceback.format_exc())
 
+# Jinja2 filter for converting UTC to Vladivostok time (UTC+10)
+@app.template_filter('vladivostok_time')
+def vladivostok_time(dt):
+    """Convert UTC datetime to Vladivostok time (UTC+10)"""
+    if not dt:
+        return 'Never'
+    from datetime import timedelta
+    vladivostok_tz_offset = timedelta(hours=10)
+    vladivostok_dt = dt + vladivostok_tz_offset
+    return vladivostok_dt.strftime('%Y-%m-%d %H:%M:%S')
+
 # Health check endpoint - returns immediately without database calls
 @app.route('/health')
 def health():
