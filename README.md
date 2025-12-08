@@ -11,6 +11,8 @@ A Flask-based web application that monitors Google Calendar events and sends ins
 - **Web Dashboard**: Easy-to-use interface for configuration and monitoring
 - **Automatic Webhook Renewal**: Automatically renews webhook subscriptions before they expire (every 6 days)
 - **Calendar Statistics**: View event activity statistics for the last 30 days
+- **Rate-Limiting Protection**: Prevents Telegram flooding with queued message delivery (~1 msg/2 sec)
+- **Initial Sync Suppression**: Silently stores past events on first scan to prevent notification floods on restart
 
 ## 🏗️ Architecture
 
@@ -26,7 +28,8 @@ This application uses **Google Calendar's push notifications API** rather than p
 3. **Google Connector** (`google_connector.py`): Interfaces with Replit's Google Calendar connector for OAuth
 4. **Calendar Monitor** (`calendar_monitor.py`): Fetches calendar data and detects changes
 5. **Telegram Notifier** (`telegram_notifier.py`): Sends formatted messages to Telegram
-6. **Database Models** (`models.py`): SQLAlchemy models for settings and event tracking
+6. **Notification Dispatcher** (`notification_dispatcher.py`): Queues and dispatches notifications with rate limiting
+7. **Database Models** (`models.py`): SQLAlchemy models for settings, events, and notification queue
 
 ## 🚀 Deployment on Replit
 
@@ -132,6 +135,8 @@ After deployment, your webhook URL will be: `https://<your-deployment-url>/webho
 - `chat_id`: Telegram chat/group ID
 - `topic_mappings`: JSON mapping of calendar names to topic IDs
 - `check_interval`: Legacy field (not used in webhook mode)
+- `initial_sync_complete`: Boolean flag indicating if initial sync has been performed
+- `initial_sync_cutoff`: Timestamp used to suppress past event notifications on initial sync
 
 ### EventRecord
 - `event_id`: Google Calendar event ID
@@ -144,6 +149,8 @@ After deployment, your webhook URL will be: `https://<your-deployment-url>/webho
 - `location`: Event location
 - `status`: Event status (confirmed/cancelled)
 - `last_updated`: Last modification timestamp
+- `first_seen_at`: Timestamp when event was first discovered (for suppression logic)
+- `last_notified_at`: Timestamp of last notification sent (prevents duplicate notifications)
 
 ### WebhookChannel
 - `channel_id`: Unique webhook channel ID
@@ -151,6 +158,17 @@ After deployment, your webhook URL will be: `https://<your-deployment-url>/webho
 - `calendar_id`: Associated calendar ID
 - `expiration`: When the webhook expires
 - `created_at`: Channel creation timestamp
+
+### NotificationQueue
+- `id`: Auto-incremented primary key
+- `message`: Notification message content
+- `calendar_name`: Source calendar name for topic routing
+- `topic_id`: Telegram topic ID (optional)
+- `status`: Queue status (pending/sent/failed)
+- `retry_count`: Number of delivery attempts
+- `created_at`: When notification was queued
+- `sent_at`: When notification was successfully sent
+- `event_id`: Associated calendar event ID
 
 ## 🔧 Technical Details
 
@@ -165,9 +183,29 @@ After deployment, your webhook URL will be: `https://<your-deployment-url>/webho
 2. Google sends POST request to `/webhook/google-calendar`
 3. Application fetches updated event details
 4. Compares with stored event records to detect changes
-5. Formats notification message
-6. Sends to Telegram via Bot API
-7. Updates database with latest event data
+5. Formats notification message and adds to queue
+6. Background dispatcher sends queued messages at ~1 per 2 seconds
+7. Updates database with latest event data and notification timestamps
+
+### Rate Limiting Protection
+The system includes multiple safeguards against Telegram flooding:
+
+1. **Initial Sync Suppression**: On first calendar scan (or after app restart):
+   - Past events are silently stored without notifications
+   - Only future events trigger notifications on initial sync
+   - Prevents notification floods when app restarts or is republished
+
+2. **Queued Notification Dispatch**:
+   - All notifications go through a queue table
+   - Background dispatcher runs every 2 seconds
+   - Processes one message per cycle (~1 msg/2 sec)
+   - Respects Telegram's rate limits
+
+3. **Telegram 429 Error Handling**:
+   - Detects "Too Many Requests" responses
+   - Parses `retry_after` value from error response
+   - Automatically backs off and retries after the specified delay
+   - Failed notifications remain in queue with incremented retry count
 
 ### Message Format
 Notifications include:
@@ -188,6 +226,12 @@ Initially, the system used polling (checking every 5 minutes). We switched to we
 
 ### Deployment Requirement
 The biggest gotcha: **Webhooks require a deployed, always-on application**. Development Repls that sleep will miss webhook notifications. This was discovered after testing showed no notifications despite successful webhook setup.
+
+### Rate Limiting Discovery
+When the app restarts or is republished, it scans all calendar events (past 7 days + future 30 days). Without safeguards, this would send 800+ notifications in seconds, causing Telegram to block the bot. Solution:
+- **Initial sync suppression**: Silently store past events, only notify for future events
+- **Queue-based delivery**: Process notifications at ~1 per 2 seconds
+- **429 error handling**: Automatically back off when Telegram rate limits kick in
 
 ### Calendar Limitations
 Not all calendars support webhooks:

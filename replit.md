@@ -80,9 +80,10 @@ The application is optimized for **Autoscale deployment** to minimize costs whil
   - Fallback: SQLite for local development (calendar_monitor.db)
 - **Connection Pooling**: Implements pool recycling (300s) and pre-ping health checks to handle connection stability
 - **Data Models**:
-  - `CalendarSettings`: Stores Telegram bot configuration and monitoring settings
-  - `EventRecord`: Tracks calendar events with their details, status, and last update timestamps
+  - `CalendarSettings`: Stores Telegram bot configuration, monitoring settings, and initial sync state
+  - `EventRecord`: Tracks calendar events with their details, status, first seen timestamp, and notification history
   - `WebhookChannel`: Stores active webhook channel information and expiration times
+  - `NotificationQueue`: Queued notifications for paced delivery to prevent Telegram flooding
 
 ### External Service Integration Architecture
 - **Google Calendar API**: 
@@ -111,11 +112,37 @@ The application is optimized for **Autoscale deployment** to minimize costs whil
   1. Google Calendar sends webhook POST to `/webhook/google-calendar`
   2. Application fetches updated event details from Google Calendar API
   3. Changes detected by comparing with stored `EventRecord` data
-  4. Telegram messages formatted and sent with event details
-  5. Database updated with latest event information
+  4. Notifications queued via `NotificationQueue` for paced delivery
+  5. Queue dispatcher sends messages at ~1 per 2 seconds to respect Telegram rate limits
+  6. Database updated with latest event information and notification timestamps
 - **Webhook Renewal**: Background scheduler renews channels every 6 days (before 7-day expiration)
 - **Statistics Tracking**: Aggregates calendar activity data for reporting (last 30 days default)
 - **Health Check**: Dedicated `/health` endpoint for deployment monitoring (no database queries)
+
+### Rate-Limiting & Flood Protection
+The system includes comprehensive safeguards against Telegram flooding:
+
+- **Initial Sync Suppression**: On first calendar scan (or after `initial_sync_complete` is reset):
+  - Past events (before current time) are silently stored without notifications
+  - Only future events trigger notifications on initial sync
+  - Prevents notification floods when app restarts or is republished
+  - Controlled by `initial_sync_complete` and `initial_sync_cutoff` fields in CalendarSettings
+
+- **Queued Notification Dispatch**:
+  - All notifications go through `NotificationQueue` table
+  - Background dispatcher runs every 2 seconds via APScheduler
+  - Processes one message per cycle (~1 msg/2 sec) to respect Telegram limits
+  - Queue tracks: message content, calendar name, topic ID, status, retry count
+
+- **Telegram 429 Error Handling**:
+  - Detects "Too Many Requests" responses from Telegram API
+  - Parses `retry_after` value from error response
+  - Automatically backs off and retries after the specified delay
+  - Failed notifications remain in queue with incremented retry count
+
+- **Event Tracking**:
+  - `first_seen_at`: Timestamp when event was first discovered (for suppression logic)
+  - `last_notified_at`: Timestamp of last notification sent (prevents duplicate notifications)
 
 ### Configuration Management
 - **Environment Variables**: Managed by Replit connector and deployment system
