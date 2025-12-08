@@ -85,20 +85,40 @@ def handle_db_migration():
         # Check if calendar_name column exists in event_record
         if inspector.has_table("event_record"):
             columns = [col['name'] for col in inspector.get_columns("event_record")]
+            conn = db.engine.connect()
             if 'calendar_name' not in columns:
                 logger.info("Adding calendar_name column to event_record table")
-                conn = db.engine.connect()
                 conn.execute(sa.text("ALTER TABLE event_record ADD COLUMN calendar_name VARCHAR(200)"))
-                conn.commit()
-                conn.close()
+            if 'first_seen_at' not in columns:
+                logger.info("Adding first_seen_at column to event_record table")
+                conn.execute(sa.text("ALTER TABLE event_record ADD COLUMN first_seen_at TIMESTAMP"))
+            if 'last_notified_at' not in columns:
+                logger.info("Adding last_notified_at column to event_record table")
+                conn.execute(sa.text("ALTER TABLE event_record ADD COLUMN last_notified_at TIMESTAMP"))
+            conn.commit()
+            conn.close()
+        
+        # Check if initial_sync columns exist in calendar_settings
+        if inspector.has_table("calendar_settings"):
+            columns = [col['name'] for col in inspector.get_columns("calendar_settings")]
+            conn = db.engine.connect()
+            if 'initial_sync_complete' not in columns:
+                logger.info("Adding initial_sync_complete column to calendar_settings table")
+                conn.execute(sa.text("ALTER TABLE calendar_settings ADD COLUMN initial_sync_complete BOOLEAN DEFAULT FALSE"))
+            if 'initial_sync_cutoff' not in columns:
+                logger.info("Adding initial_sync_cutoff column to calendar_settings table")
+                conn.execute(sa.text("ALTER TABLE calendar_settings ADD COLUMN initial_sync_cutoff TIMESTAMP"))
+            conn.commit()
+            conn.close()
         
         logger.info("Database schema ready")
 
 # Import here after initializing app to avoid circular imports
-from models import CalendarSettings, EventRecord  
+from models import CalendarSettings, EventRecord, NotificationQueue  
 from calendar_monitor import check_calendar_changes
 from telegram_notifier import send_telegram_message
 from telegram_stats import process_telegram_update
+from notification_dispatcher import enqueue_notification, process_notification_queue, should_notify_event, mark_initial_sync_complete, get_queue_stats
 
 # Create a function to check for calendar changes
 def scheduled_calendar_check():
@@ -131,17 +151,21 @@ def scheduled_calendar_check():
                     except:
                         logger.error("Failed to parse topic mappings")
                 
-                # Limit number of messages to prevent overwhelming Telegram
-                max_messages = 20
-                if len(changes) > max_messages:
-                    logger.warning(f"Found {len(changes)} changes, limiting to {max_messages} to avoid rate limits")
-                    changes = changes[:max_messages]
+                # Enqueue notifications instead of sending directly
+                queued_count = 0
+                skipped_count = 0
                 
-                # Send notifications for each change with rate limiting
-                import time
-                for i, change in enumerate(changes):
+                for change in changes:
                     message = change['message']
                     calendar_name = change.get('calendar_name', 'Unknown')
+                    event_id = change.get('event_id', 'unknown')
+                    calendar_id = change.get('calendar_id', 'unknown')
+                    is_past_event = change.get('is_past_event', False)
+                    
+                    # Check if we should notify for this event (initial sync suppression)
+                    if not should_notify_event(event_id, calendar_id, is_past_event, settings):
+                        skipped_count += 1
+                        continue
                     
                     # If using a supergroup, get the topic ID from mappings
                     topic_id = None
@@ -151,19 +175,21 @@ def scheduled_calendar_check():
                         if not topic_id:
                             logger.warning(f"No topic mapping found for calendar '{calendar_name}', sending to General")
                     
-                    logger.info(f"Calendar change detected ({i+1}/{len(changes)}): {message[:50]}...")
-                    
-                    # Send the message
-                    send_telegram_message(
-                        settings.telegram_bot_token,
-                        settings.chat_id,
-                        message,
-                        topic_id
+                    # Enqueue the notification
+                    enqueue_notification(
+                        event_id=event_id,
+                        calendar_id=calendar_id,
+                        calendar_name=calendar_name,
+                        message=message,
+                        topic_id=topic_id
                     )
-                    
-                    # Add small delay between messages to avoid rate limiting (Telegram limit is 30 msg/sec)
-                    if i < len(changes) - 1:
-                        time.sleep(0.1)
+                    queued_count += 1
+                
+                logger.info(f"Queued {queued_count} notifications, skipped {skipped_count} (initial sync suppression)")
+                
+                # Mark initial sync as complete after first successful run
+                if not settings.initial_sync_complete:
+                    mark_initial_sync_complete()
                 
             # Update the last check time (naive UTC)
             from datetime import timezone
@@ -201,8 +227,17 @@ def ensure_initialization():
                     from google_calendar_webhook import renew_expiring_channels
                     scheduler.add_job(renew_expiring_channels, 'interval', days=6, id='webhook_renewal', replace_existing=True)
                     
+                    # Add notification queue dispatcher job - runs every 2 seconds for paced delivery
+                    scheduler.add_job(
+                        process_notification_queue, 
+                        'interval', 
+                        seconds=2, 
+                        id='notification_dispatcher', 
+                        replace_existing=True
+                    )
+                    
                     scheduler.start()
-                    logger.info("Scheduler started for webhook renewal only")
+                    logger.info("Scheduler started for webhook renewal and notification dispatch")
                     
                     # Set up Google Calendar webhooks for push notifications automatically
                     try:

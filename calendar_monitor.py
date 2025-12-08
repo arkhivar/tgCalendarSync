@@ -239,11 +239,17 @@ def check_calendar_changes():
                 if creator_info:
                     message += creator_info
 
+                # Determine if this is a past event
+                is_past_event = start_time < current_time if start_time else False
+                
                 changes.append({
                     'type': 'added',
                     'event': new_event,
                     'message': message,
-                    'calendar_name': event.get('calendarName', source_calendar_id)
+                    'calendar_name': event.get('calendarName', source_calendar_id),
+                    'event_id': event_id,
+                    'calendar_id': source_calendar_id,
+                    'is_past_event': is_past_event
                 })
 
             elif updated_time and existing_event.last_updated:
@@ -327,11 +333,17 @@ def check_calendar_changes():
                         if creator_info:
                             message += creator_info
 
+                        # Determine if this is a past event
+                        is_past_event = start_time < current_time if start_time else False
+                        
                         changes.append({
                             'type': 'updated',
                             'event': existing_event,
                             'message': message,
-                            'calendar_name': event.get('calendarName', source_calendar_id)
+                            'calendar_name': event.get('calendarName', source_calendar_id),
+                            'event_id': event_id,
+                            'calendar_id': source_calendar_id,
+                            'is_past_event': is_past_event
                         })
 
         # Clean up old past events from database (older than 7 days) - bulk delete
@@ -367,7 +379,10 @@ def check_calendar_changes():
                         'type': 'deleted',
                         'event': deleted_event,
                         'message': message,
-                        'calendar_name': calendar_display_name
+                        'calendar_name': calendar_display_name,
+                        'event_id': event_id,
+                        'calendar_id': cal_id,
+                        'is_past_event': False  # Deleted future events are not past events
                     })
 
                 # Remove the event from the database

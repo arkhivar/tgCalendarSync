@@ -6,6 +6,16 @@ from urllib.parse import quote
 # Set up logging
 logger = logging.getLogger(__name__)
 
+class TelegramResult:
+    """Structured result from Telegram API call"""
+    def __init__(self, success, retry_after=None, error_message=None):
+        self.success = success
+        self.retry_after = retry_after  # Seconds to wait if rate limited
+        self.error_message = error_message
+    
+    def __bool__(self):
+        return self.success
+
 def send_telegram_message(bot_token, chat_id, message, topic_id=None, parse_mode="Markdown"):
     """
     Send a message to a Telegram chat or supergroup with optional topic
@@ -18,12 +28,12 @@ def send_telegram_message(bot_token, chat_id, message, topic_id=None, parse_mode
         parse_mode (str, optional): The parse mode for the message (Markdown or HTML)
     
     Returns:
-        bool: True if message was sent successfully, False otherwise
+        TelegramResult: Structured result with success status and retry info
     """
     try:
         if not bot_token or not chat_id:
             logger.error("Missing bot token or chat ID")
-            return False
+            return TelegramResult(False, error_message="Missing bot token or chat ID")
         
         # Parameters for the request
         params = {
@@ -46,14 +56,23 @@ def send_telegram_message(bot_token, chat_id, message, topic_id=None, parse_mode
         # Check if request was successful
         if response.status_code == 200:
             logger.info(f"Message sent to Telegram: {message[:50]}...")
-            return True
+            return TelegramResult(True)
+        elif response.status_code == 429:
+            # Rate limited - parse retry_after
+            try:
+                error_data = response.json()
+                retry_after = error_data.get('parameters', {}).get('retry_after', 30)
+                logger.warning(f"Telegram rate limit hit. Retry after {retry_after} seconds")
+                return TelegramResult(False, retry_after=retry_after, error_message="Rate limited")
+            except:
+                return TelegramResult(False, retry_after=30, error_message="Rate limited (unknown retry)")
         else:
             logger.error(f"Failed to send Telegram message. Status code: {response.status_code}, Response: {response.text}")
-            return False
+            return TelegramResult(False, error_message=f"HTTP {response.status_code}: {response.text[:100]}")
     
     except Exception as e:
         logger.error(f"Error sending Telegram message: {str(e)}")
-        return False
+        return TelegramResult(False, error_message=str(e))
 
 def get_topic_id_from_mapping(topic_mappings, calendar_name):
     """
