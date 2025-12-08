@@ -55,9 +55,10 @@ def get_calendar_events(service, calendar_id='primary', time_min=None, time_max=
     """
     try:
         # Set default time range if not provided
-        # Only look at current and future events (from now onwards)
+        # Include past events (last 7 days) and future events (next 30 days)
+        # This allows detecting changes to recent past events
         if not time_min:
-            time_min = datetime.utcnow()
+            time_min = datetime.utcnow() - timedelta(days=7)
         if not time_max:
             time_max = datetime.utcnow() + timedelta(days=30)
 
