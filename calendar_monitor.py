@@ -239,8 +239,12 @@ def check_calendar_changes():
                 if creator_info:
                     message += creator_info
 
-                # Determine if this is a past event
-                is_past_event = start_time < current_time if start_time else False
+                # Determine if this is a past event (normalize to naive UTC for comparison)
+                is_past_event = False
+                if start_time:
+                    start_time_naive = start_time.replace(tzinfo=None) if start_time.tzinfo else start_time
+                    current_time_naive = current_time.replace(tzinfo=None)
+                    is_past_event = start_time_naive < current_time_naive
                 
                 changes.append({
                     'type': 'added',
@@ -333,8 +337,12 @@ def check_calendar_changes():
                         if creator_info:
                             message += creator_info
 
-                        # Determine if this is a past event
-                        is_past_event = start_time < current_time if start_time else False
+                        # Determine if this is a past event (normalize to naive UTC for comparison)
+                        is_past_event = False
+                        if start_time:
+                            start_time_naive = start_time.replace(tzinfo=None) if start_time.tzinfo else start_time
+                            current_time_naive = current_time.replace(tzinfo=None)
+                            is_past_event = start_time_naive < current_time_naive
                         
                         changes.append({
                             'type': 'updated',
