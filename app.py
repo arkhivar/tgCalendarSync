@@ -161,11 +161,22 @@ def scheduled_calendar_check():
                     event_id = change.get('event_id', 'unknown')
                     calendar_id = change.get('calendar_id', 'unknown')
                     is_past_event = change.get('is_past_event', False)
+                    change_type = change.get('type', 'updated')
                     
                     # Check if we should notify for this event (initial sync suppression)
                     if not should_notify_event(event_id, calendar_id, is_past_event, settings):
                         skipped_count += 1
                         continue
+                    
+                    # Add past event prefix if this is a past event
+                    if is_past_event:
+                        past_event_labels = {
+                            'added': '⏪ Past event added',
+                            'updated': '⏪ Past event updated',
+                            'deleted': '⏪ Past event deleted'
+                        }
+                        prefix = past_event_labels.get(change_type, '⏪ Past event changed')
+                        message = f"{prefix}\n\n{message}"
                     
                     # If using a supergroup, get the topic ID from mappings
                     topic_id = None

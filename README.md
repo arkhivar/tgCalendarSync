@@ -210,11 +210,21 @@ The system includes multiple safeguards against Telegram flooding:
 ### Message Format
 Notifications include:
 - Event type (New/Updated/Deleted)
+- **Past event indicator** (⏪ Past event added/updated/deleted) for events that have already occurred
 - Event title
 - Start and end times
 - Location (if specified)
 - Description (if provided)
 - Calendar name
+
+Example past event notification:
+```
+⏪ Past event updated
+
+📝 Event updated: Team Meeting
+📅 Date: December 5, 2025
+...
+```
 
 ## 📝 Important Lessons from Development
 

@@ -144,6 +144,11 @@ The system includes comprehensive safeguards against Telegram flooding:
   - `first_seen_at`: Timestamp when event was first discovered (for suppression logic)
   - `last_notified_at`: Timestamp of last notification sent (prevents duplicate notifications)
 
+- **Past Event Highlighting**:
+  - Past events are clearly marked with a "⏪ Past event added/updated/deleted" prefix
+  - Makes it easy to distinguish between future event notifications and historical changes
+  - Uses the `is_past_event` flag from calendar_monitor to determine event timing
+
 ### Configuration Management
 - **Environment Variables**: Managed by Replit connector and deployment system
 - **Database Configuration**: Telegram settings and topic mappings stored in CalendarSettings model
