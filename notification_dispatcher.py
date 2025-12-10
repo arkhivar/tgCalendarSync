@@ -7,12 +7,27 @@ logger = logging.getLogger(__name__)
 MIN_SEND_INTERVAL = 1.5  # Seconds between messages to stay under Telegram limits
 MAX_RETRY_COUNT = 5  # Max retries before marking as failed
 
+DEDUP_WINDOW_SECONDS = 60  # Ignore duplicate notifications within this window
+
 def enqueue_notification(event_id, calendar_id, calendar_name, message, topic_id=None):
-    """Add a notification to the queue instead of sending immediately"""
+    """Add a notification to the queue instead of sending immediately.
+    Includes deduplication to prevent duplicate messages for the same event.
+    """
     from app import db
     from models import NotificationQueue
     
     try:
+        # Check for recent duplicate: same event_id in last 60 seconds
+        cutoff_time = datetime.utcnow() - timedelta(seconds=DEDUP_WINDOW_SECONDS)
+        existing = NotificationQueue.query.filter(
+            NotificationQueue.event_id == event_id,
+            NotificationQueue.created_at >= cutoff_time
+        ).first()
+        
+        if existing:
+            logger.debug(f"Skipping duplicate notification for event {event_id} (already queued recently)")
+            return False
+        
         notification = NotificationQueue(
             event_id=event_id,
             calendar_id=calendar_id,
