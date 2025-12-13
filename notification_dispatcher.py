@@ -7,26 +7,44 @@ logger = logging.getLogger(__name__)
 MIN_SEND_INTERVAL = 1.5  # Seconds between messages to stay under Telegram limits
 MAX_RETRY_COUNT = 5  # Max retries before marking as failed
 
-DEDUP_WINDOW_SECONDS = 60  # Ignore duplicate notifications within this window
+DEDUP_WINDOW_HOURS = 24  # Ignore duplicate notifications within this window
 
 def enqueue_notification(event_id, calendar_id, calendar_name, message, topic_id=None):
     """Add a notification to the queue instead of sending immediately.
-    Includes deduplication to prevent duplicate messages for the same event.
+    Includes aggressive deduplication to prevent duplicate messages for the same event.
     """
     from app import db
     from models import NotificationQueue
     
     try:
-        # Check for recent duplicate: same event_id in last 60 seconds
-        cutoff_time = datetime.utcnow() - timedelta(seconds=DEDUP_WINDOW_SECONDS)
+        # Check for recent duplicate: same event_id with same message in last 24 hours
+        cutoff_time = datetime.utcnow() - timedelta(hours=DEDUP_WINDOW_HOURS)
+        
+        # Look for any queued notification for this event (regardless of status)
+        # Only skip if we find one with the SAME message in the dedup window
         existing = NotificationQueue.query.filter(
             NotificationQueue.event_id == event_id,
-            NotificationQueue.created_at >= cutoff_time
+            NotificationQueue.created_at >= cutoff_time,
+            NotificationQueue.message == message  # Only skip if message is identical
         ).first()
         
         if existing:
-            logger.debug(f"Skipping duplicate notification for event {event_id} (already queued recently)")
+            logger.debug(f"Skipping duplicate notification for event {event_id} (same message sent {(datetime.utcnow() - existing.created_at).total_seconds():.0f}s ago)")
             return False
+        
+        # Also check for ANY notification for this event sent successfully in the dedup window
+        # If an event already has a sent notification, don't send another unless it's a different message
+        recently_sent = NotificationQueue.query.filter(
+            NotificationQueue.event_id == event_id,
+            NotificationQueue.status == 'sent',
+            NotificationQueue.created_at >= cutoff_time
+        ).first()
+        
+        if recently_sent:
+            logger.debug(f"Event {event_id} was recently notified ({(datetime.utcnow() - recently_sent.created_at).total_seconds():.0f}s ago), only queueing if message differs")
+            if recently_sent.message == message:
+                logger.debug(f"Skipping - exact same message already sent for event {event_id}")
+                return False
         
         notification = NotificationQueue(
             event_id=event_id,
