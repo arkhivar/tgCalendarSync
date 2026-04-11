@@ -162,8 +162,25 @@ def scheduled_calendar_check():
                     calendar_id = change.get('calendar_id', 'unknown')
                     is_past_event = change.get('is_past_event', False)
                     change_type = change.get('type', 'updated')
+                    updated_time = change.get('updated_time')
                     
-                    # Check if we should notify for this event (initial sync suppression)
+                    # During initial/re-sync, suppress ALL events that were not recently changed.
+                    # "Recent" means updated within 2 hours of the sync starting.
+                    # This prevents a flood of "new event" messages when the app wakes from
+                    # a long absence and the database is missing current events.
+                    if not settings.initial_sync_complete:
+                        if settings.initial_sync_cutoff and updated_time:
+                            updated_time_naive = updated_time.replace(tzinfo=None) if updated_time.tzinfo else updated_time
+                            cutoff_with_buffer = settings.initial_sync_cutoff - timedelta(hours=2)
+                            if updated_time_naive < cutoff_with_buffer:
+                                skipped_count += 1
+                                continue
+                        elif not updated_time:
+                            # No updated_time available — suppress to be safe
+                            skipped_count += 1
+                            continue
+                    
+                    # Check if we should notify for this event (initial sync suppression for past events)
                     if not should_notify_event(event_id, calendar_id, is_past_event, settings):
                         skipped_count += 1
                         continue
@@ -241,6 +258,18 @@ def ensure_initialization():
                         item.last_error = 'Marked failed on restart (was stuck in sending state)'
                     db.session.commit()
                     logger.info(f"Cleaned up {len(stale_sending)} stale 'sending' notifications on startup")
+                
+                # If last check was more than 6 hours ago, reset initial_sync_complete so that
+                # the first check after a long absence does a silent re-seed of the database
+                # without flooding Telegram with "new event" notifications for pre-existing events.
+                settings = CalendarSettings.query.first()
+                if settings and settings.last_check:
+                    hours_since = (datetime.utcnow() - settings.last_check).total_seconds() / 3600
+                    if hours_since > 6:
+                        logger.warning(f"Last check was {hours_since:.1f}h ago - triggering silent re-sync to avoid notification flood")
+                        settings.initial_sync_complete = False
+                        settings.initial_sync_cutoff = datetime.utcnow()
+                        db.session.commit()
 
                 if settings and not scheduler.running:
                     # Renew webhook channels every 6 days (before 7-day expiration)

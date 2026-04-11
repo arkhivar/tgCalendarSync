@@ -248,7 +248,8 @@ def check_calendar_changes():
                     'calendar_name': event.get('calendarName', source_calendar_id),
                     'event_id': event_id,
                     'calendar_id': source_calendar_id,
-                    'is_past_event': is_past_event
+                    'is_past_event': is_past_event,
+                    'updated_time': updated_time
                 })
 
             elif updated_time and existing_event.last_updated:
@@ -346,7 +347,8 @@ def check_calendar_changes():
                             'calendar_name': event.get('calendarName', source_calendar_id),
                             'event_id': event_id,
                             'calendar_id': source_calendar_id,
-                            'is_past_event': is_past_event
+                            'is_past_event': is_past_event,
+                            'updated_time': updated_time
                         })
 
         # Clean up old past events from database (older than 7 days) - bulk delete
