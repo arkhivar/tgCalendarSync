@@ -233,20 +233,39 @@ def ensure_initialization():
                 
                 # Start the scheduler if settings exist
                 settings = CalendarSettings.query.first()
+                # Clean up stale "sending" items left over from a previous crash/restart
+                stale_sending = NotificationQueue.query.filter_by(status='sending').all()
+                if stale_sending:
+                    for item in stale_sending:
+                        item.status = 'failed'
+                        item.last_error = 'Marked failed on restart (was stuck in sending state)'
+                    db.session.commit()
+                    logger.info(f"Cleaned up {len(stale_sending)} stale 'sending' notifications on startup")
+
                 if settings and not scheduler.running:
-                    # Only add job to renew webhook channels every 6 days (before 7-day expiration)
+                    # Renew webhook channels every 6 days (before 7-day expiration)
                     from google_calendar_webhook import renew_expiring_channels
                     scheduler.add_job(renew_expiring_channels, 'interval', days=6, id='webhook_renewal', replace_existing=True)
-                    
-                    # Add notification queue dispatcher job - runs every 2 seconds for paced delivery
+
+                    # Polling fallback: check for calendar changes every 5 minutes
+                    # This ensures notifications work even if webhooks are not active
                     scheduler.add_job(
-                        process_notification_queue, 
-                        'interval', 
-                        seconds=2, 
-                        id='notification_dispatcher', 
+                        scheduled_calendar_check,
+                        'interval',
+                        minutes=5,
+                        id='calendar_check_polling',
                         replace_existing=True
                     )
-                    
+
+                    # Notification queue dispatcher - runs every 2 seconds for paced delivery
+                    scheduler.add_job(
+                        process_notification_queue,
+                        'interval',
+                        seconds=2,
+                        id='notification_dispatcher',
+                        replace_existing=True
+                    )
+
                     scheduler.start()
                     logger.info("Scheduler started for webhook renewal and notification dispatch")
                     

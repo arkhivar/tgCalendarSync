@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials as GoogleCredentials
 from models import CalendarSettings
 from app import db
-from google_connector import get_access_token
+from google_connector import get_access_token, ReplitConnectorCredentials
 
 logger = logging.getLogger(__name__)
 
@@ -154,11 +154,13 @@ def setup_all_calendar_watches():
 
 def get_google_service():
     """
-    Get authenticated Google Calendar API service
+    Get authenticated Google Calendar API service.
+    Uses ReplitConnectorCredentials so expired tokens are refreshed
+    via the connector rather than causing a fatal error.
     """
     try:
         access_token = get_access_token()
-        credentials = GoogleCredentials(token=access_token)
+        credentials = ReplitConnectorCredentials(token=access_token)
         service = build('calendar', 'v3', credentials=credentials)
         return service
     except Exception as e:

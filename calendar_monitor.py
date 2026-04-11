@@ -7,7 +7,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as GoogleCredentials
 from models import EventRecord, CalendarSettings
 from app import db
-from google_connector import get_access_token, get_user_email
+from google_connector import get_access_token, get_user_email, ReplitConnectorCredentials
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -17,20 +17,15 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
 
 def get_google_service():
     """
-    Create and return a Google Calendar API service using Replit connector
+    Create and return a Google Calendar API service using Replit connector.
+    Uses ReplitConnectorCredentials so that when a token expires mid-request,
+    the connector is called again to get a fresh token instead of failing.
     """
     try:
-        # Get access token from the Replit connector
         access_token = get_access_token()
-
-        # Create credentials object with just the access token
-        # The connector handles refresh automatically
-        credentials = GoogleCredentials(token=access_token)
-
-        # Build the service
+        credentials = ReplitConnectorCredentials(token=access_token)
         service = build('calendar', 'v3', credentials=credentials)
         return service
-
     except Exception as e:
         logger.error(f"Error creating Google service: {str(e)}")
         raise
