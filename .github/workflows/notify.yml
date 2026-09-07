@@ -13,7 +13,7 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Send dispatch to tg-repo-watcher
+      - name: Send dispatch to repowatbot
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.WATCHER_DISPATCH_PAT }}
@@ -42,7 +42,7 @@ jobs:
             }
             await github.rest.repos.createDispatchEvent({
               owner: 'arkhivar',
-              repo:  'tg-repo-watcher',
+              repo:  'repowatbot',
               event_type: 'repo-update',
               client_payload: payload,
             });
